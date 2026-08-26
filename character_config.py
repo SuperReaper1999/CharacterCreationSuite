@@ -9,20 +9,27 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 1
+RIG_TYPES = ("standard", "extended")
 BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "ZombieAttack")
+EXTENDED_CLIP_SUFFIX = "Extended"
 BONE_NAMES = (
     "Hips", "Chest", "Neck", "Head",
     "UpperArm.L", "Forearm.L", "Hand.L", "UpperArm.R", "Forearm.R", "Hand.R",
     "UpperLeg.L", "LowerLeg.L", "Foot.L", "UpperLeg.R", "LowerLeg.R", "Foot.R",
 )
+# Bones that only exist on rig_type "extended" — see rig_builder.py.
+EXTENDED_ONLY_BONE_NAMES = ("Spine", "UpperChest", "Shoulder.L", "Shoulder.R", "Toe.L", "Toe.R")
+ALL_BONE_NAMES = BONE_NAMES + EXTENDED_ONLY_BONE_NAMES
 
 
 def supported_clips() -> tuple[str, ...]:
-    """Built-in clips plus any user-saved preset animations (see custom_clips.py),
-    in that order, de-duplicated so a preset can deliberately override a built-in
-    of the same name."""
+    """Built-in clips (each with an Extended-suffixed sibling for rig_type
+    "extended" — see animation_library.py) plus any user-saved preset
+    animations (see custom_clips.py), de-duplicated so a preset can
+    deliberately override a built-in of the same name."""
     from custom_clips import custom_clip_names
-    return tuple(dict.fromkeys((*BUILTIN_CLIPS, *custom_clip_names())))
+    builtin_and_extended = (*BUILTIN_CLIPS, *(f"{name}{EXTENDED_CLIP_SUFFIX}" for name in BUILTIN_CLIPS))
+    return tuple(dict.fromkeys((*builtin_and_extended, *custom_clip_names())))
 
 
 def default_config() -> dict[str, Any]:
@@ -31,6 +38,7 @@ def default_config() -> dict[str, Any]:
         "character_id": "NewCharacter",
         "display_name": "New Character",
         "archetype": "humanoid",
+        "rig_type": "standard",
         "target_height_m": 1.75,
         "proportions": {"shoulder_width": 1.0, "torso_length": 1.0, "arm_length": 1.0, "leg_length": 1.0, "head_scale": 1.0, "body_width": 1.0},
         "materials": {
@@ -62,6 +70,8 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     config["character_id"] = safe_id(config["character_id"])
     config["display_name"] = str(config["display_name"]).strip() or config["character_id"]
     config["archetype"] = str(config["archetype"]).lower()
+    rig_type = str(config.get("rig_type", "standard")).lower()
+    config["rig_type"] = rig_type if rig_type in RIG_TYPES else "standard"
     config["target_height_m"] = _number(config["target_height_m"], 0.8, 2.8, 1.75)
     config["output_root"] = str(config["output_root"] or "build")
     config["export_preview_glb"] = bool(config["export_preview_glb"])

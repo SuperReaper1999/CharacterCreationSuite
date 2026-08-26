@@ -16,7 +16,7 @@ import math
 from pathlib import Path
 from typing import Any
 
-from character_config import BONE_NAMES, safe_id
+from character_config import ALL_BONE_NAMES, safe_id
 
 ROOT = Path(__file__).resolve().parent
 CUSTOM_CLIPS_DIR = ROOT / "presets" / "animations"
@@ -26,7 +26,7 @@ def _degrees_to_radians_pose(pose: dict[str, list[float]]) -> dict[str, tuple[fl
     return {
         bone: tuple(math.radians(float(component)) for component in rotation)
         for bone, rotation in pose.items()
-        if bone in BONE_NAMES
+        if bone in ALL_BONE_NAMES
     }
 
 

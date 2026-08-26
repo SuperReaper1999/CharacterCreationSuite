@@ -9,7 +9,9 @@ load a preset from `presets/`, then generate a Unity-ready FBX into
 `build/<character-id>/`.
 
 The suite deliberately preserves the old pipeline's hard constraints: fixed
-16-bone humanoid topology, metres, Blender Z-up authoring, Unity FBX axis
+humanoid topology (16-bone "standard", or the newer 22-bone "extended" rig
+with Spine/UpperChest/Shoulder/Toe added — both configurable per character,
+never mixed at build time), metres, Blender Z-up authoring, Unity FBX axis
 conversion, rotation-only clips, no Animation Events, and no leaf bones.
 Generated build folders are disposable; the JSON preset is the editable source
 of truth. The old scripts below remain as legacy references until the new FBX

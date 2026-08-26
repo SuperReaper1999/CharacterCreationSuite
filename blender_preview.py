@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from animation_library import clips
-from character_config import BONE_NAMES, BUILTIN_CLIPS, load_config, safe_id
+from character_config import BUILTIN_CLIPS, load_config, safe_id
 from custom_clips import save_custom_clip
 from rig_builder import action_fcurves, bake_pose_action, build_character
 
@@ -70,8 +70,8 @@ class CCS_OT_save_preset(bpy.types.Operator):
         for frame in significant_frames:
             scene.frame_set(frame)
             poses_degrees[frame] = {
-                bone_name: tuple(math.degrees(component) for component in armature.pose.bones[bone_name].rotation_euler)
-                for bone_name in BONE_NAMES
+                bone.name: tuple(math.degrees(component) for component in bone.rotation_euler)
+                for bone in armature.pose.bones
             }
         scene.frame_set(original_frame)
 

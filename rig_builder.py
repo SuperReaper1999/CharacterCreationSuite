@@ -4,6 +4,13 @@ Used by both the headless export worker (blender_build.py) and the
 interactive per-clip preview (blender_preview.py), so both always build
 the exact same armature and skin from a config — there is only one place
 that defines what "the rig" is.
+
+Two rig types are supported (config["rig_type"]):
+- "standard" (default): the original fixed 16-bone humanoid.
+- "extended": the same skeleton with Spine, UpperChest, Shoulder.L/R and
+  Toe.L/R added — all standard bone names still exist at the same
+  positions, so every clip authored for "standard" bakes correctly on
+  "extended" too; it just leaves the new bones at rest.
 """
 
 from __future__ import annotations
@@ -25,7 +32,13 @@ def action_fcurves(action):
 
 
 def bake_pose_action(armature, clip_name: str, clip: dict[str, Any]):
-    """Bake one clip's keyframed poses onto armature as a new Action."""
+    """Bake one clip's keyframed poses onto armature as a new Action.
+
+    Bone names the clip references that don't exist on this armature are
+    skipped rather than raising — this is what lets an "Extended"-suffixed
+    clip (or a custom preset saved from the extended rig) be selected
+    safely even for a "standard" build; the extra bones just don't animate.
+    """
     action = bpy.data.actions.new(clip_name)
     action.use_frame_range = True
     action.frame_start = 1
@@ -36,13 +49,83 @@ def bake_pose_action(armature, clip_name: str, clip: dict[str, Any]):
         for bone in armature.pose.bones:
             bone.rotation_mode = "XYZ"; bone.rotation_euler = (0, 0, 0)
         for bone_name, rotation in pose.items():
-            armature.pose.bones[bone_name].rotation_euler = rotation
+            if bone_name in armature.pose.bones:
+                armature.pose.bones[bone_name].rotation_euler = rotation
         for bone in armature.pose.bones:
             bone.keyframe_insert(data_path="rotation_euler", frame=frame)
     for curve in action_fcurves(action):
         for point in curve.keyframe_points:
             point.interpolation = "BEZIER"
     return action
+
+
+def _standard_bones(scale, shoulder, leg_x, arm_length, leg_length):
+    return {
+        "Hips": ((0, 0, .90 * scale), (0, 0, 1.15 * scale), None), "Chest": ((0, 0, 1.15 * scale), (0, 0, 1.95 * scale), "Hips"),
+        "Neck": ((0, 0, 1.95 * scale), (0, 0, 2.05 * scale), "Chest"), "Head": ((0, 0, 2.05 * scale), (0, 0, 2.56 * scale), "Neck"),
+        "UpperArm.L": ((-shoulder, 0, 1.92 * scale), (-shoulder, 0, 1.92 * scale - arm_length), "Chest"), "Forearm.L": ((-shoulder, 0, 1.92 * scale - arm_length), (-shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.L"), "Hand.L": ((-shoulder, 0, 1.92 * scale - arm_length * 2), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.L"),
+        "UpperArm.R": ((shoulder, 0, 1.92 * scale), (shoulder, 0, 1.92 * scale - arm_length), "Chest"), "Forearm.R": ((shoulder, 0, 1.92 * scale - arm_length), (shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.R"), "Hand.R": ((shoulder, 0, 1.92 * scale - arm_length * 2), (shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.R"),
+        "UpperLeg.L": ((-leg_x, 0, .90 * scale), (-leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.L": ((-leg_x, 0, .90 * scale - leg_length), (-leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.L"), "Foot.L": ((-leg_x, 0, .90 * scale - leg_length * 2), (-leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.L"),
+        "UpperLeg.R": ((leg_x, 0, .90 * scale), (leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.R": ((leg_x, 0, .90 * scale - leg_length), (leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.R"), "Foot.R": ((leg_x, 0, .90 * scale - leg_length * 2), (leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.R"),
+    }
+
+
+def _extended_bones(scale, shoulder, leg_x, arm_length, leg_length):
+    # Same overall silhouette as the standard rig (Hips at .90-1.15, torso
+    # top at 1.95, shoulders at 1.92, feet at .90-leg_length*2) — the torso
+    # is just subdivided into Spine/Chest/UpperChest instead of one bone,
+    # arms hang off a Shoulder bone instead of straight off the torso, and
+    # feet gain a Toe bone. Every standard bone name/position is preserved
+    # exactly, so standard-authored clips still bake correctly here.
+    return {
+        "Hips": ((0, 0, .90 * scale), (0, 0, 1.15 * scale), None),
+        "Spine": ((0, 0, 1.15 * scale), (0, 0, 1.35 * scale), "Hips"),
+        "Chest": ((0, 0, 1.35 * scale), (0, 0, 1.65 * scale), "Spine"),
+        "UpperChest": ((0, 0, 1.65 * scale), (0, 0, 1.95 * scale), "Chest"),
+        "Neck": ((0, 0, 1.95 * scale), (0, 0, 2.05 * scale), "UpperChest"), "Head": ((0, 0, 2.05 * scale), (0, 0, 2.56 * scale), "Neck"),
+        "Shoulder.L": ((0, 0, 1.92 * scale), (-shoulder, 0, 1.92 * scale), "UpperChest"),
+        "UpperArm.L": ((-shoulder, 0, 1.92 * scale), (-shoulder, 0, 1.92 * scale - arm_length), "Shoulder.L"), "Forearm.L": ((-shoulder, 0, 1.92 * scale - arm_length), (-shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.L"), "Hand.L": ((-shoulder, 0, 1.92 * scale - arm_length * 2), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.L"),
+        "Shoulder.R": ((0, 0, 1.92 * scale), (shoulder, 0, 1.92 * scale), "UpperChest"),
+        "UpperArm.R": ((shoulder, 0, 1.92 * scale), (shoulder, 0, 1.92 * scale - arm_length), "Shoulder.R"), "Forearm.R": ((shoulder, 0, 1.92 * scale - arm_length), (shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.R"), "Hand.R": ((shoulder, 0, 1.92 * scale - arm_length * 2), (shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.R"),
+        "UpperLeg.L": ((-leg_x, 0, .90 * scale), (-leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.L": ((-leg_x, 0, .90 * scale - leg_length), (-leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.L"), "Foot.L": ((-leg_x, 0, .90 * scale - leg_length * 2), (-leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.L"),
+        "Toe.L": ((-leg_x, .35 * scale, .90 * scale - leg_length * 2), (-leg_x, .55 * scale, .90 * scale - leg_length * 2), "Foot.L"),
+        "UpperLeg.R": ((leg_x, 0, .90 * scale), (leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.R": ((leg_x, 0, .90 * scale - leg_length), (leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.R"), "Foot.R": ((leg_x, 0, .90 * scale - leg_length * 2), (leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.R"),
+        "Toe.R": ((leg_x, .35 * scale, .90 * scale - leg_length * 2), (leg_x, .55 * scale, .90 * scale - leg_length * 2), "Foot.R"),
+    }
+
+
+def _standard_parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head):
+    return [
+        ("Hips", (.55 * scale * body, .28 * scale, .25 * scale), (0, 0, 1.00 * scale), "bottom", "Hips"), ("Torso", (.60 * scale * body, .30 * scale, .80 * scale * torso), (0, 0, 1.55 * scale), "top", "Chest"),
+        ("Neck", (.18 * scale, .18 * scale, .15 * scale), (0, 0, 2.00 * scale), "skin", "Neck"), ("Head", (.42 * scale * head, .42 * scale * head, .42 * scale * head), (0, 0, 2.30 * scale), "skin", "Head"),
+        ("UpperArm.L", (.22 * scale, .22 * scale, arm_length), (-shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.L"), ("Forearm.L", (.20 * scale, .20 * scale, arm_length * .9375), (-shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.L"), ("Hand.L", (.22 * scale, .22 * scale, .18 * scale), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.L"),
+        ("UpperArm.R", (.22 * scale, .22 * scale, arm_length), (shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.R"), ("Forearm.R", (.20 * scale, .20 * scale, arm_length * .9375), (shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.R"), ("Hand.R", (.22 * scale, .22 * scale, .18 * scale), (shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.R"),
+        ("UpperLeg.L", (.23 * scale * body, .24 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.L"), ("LowerLeg.L", (.21 * scale * body, .22 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.L"), ("Foot.L", (.25 * scale * body, .45 * scale, .16 * scale), (-leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.L"),
+        ("UpperLeg.R", (.23 * scale * body, .24 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.R"), ("LowerLeg.R", (.21 * scale * body, .22 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.R"), ("Foot.R", (.25 * scale * body, .45 * scale, .16 * scale), (leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.R"),
+    ]
+
+
+def _extended_parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head):
+    # Same Torso footprint (.60*body x .30 x .80*torso, spanning z 1.15-1.95)
+    # as the standard rig, just split into three stacked boxes matching the
+    # Spine/Chest/UpperChest bone ranges (heights .20/.30/.30, summing to
+    # the standard rig's .80) so subdividing the spine actually deforms the
+    # torso instead of leaving one rigid box. Arm/leg boxes are identical to
+    # the standard rig — they bind by bone name, which exists unchanged
+    # here, only the parent chain above them differs.
+    return [
+        ("Hips", (.55 * scale * body, .28 * scale, .25 * scale), (0, 0, 1.00 * scale), "bottom", "Hips"),
+        ("Spine", (.58 * scale * body, .29 * scale, .20 * scale * torso), (0, 0, 1.25 * scale), "top", "Spine"),
+        ("Chest", (.60 * scale * body, .30 * scale, .30 * scale * torso), (0, 0, 1.50 * scale), "top", "Chest"),
+        ("UpperChest", (.60 * scale * body, .30 * scale, .30 * scale * torso), (0, 0, 1.80 * scale), "top", "UpperChest"),
+        ("Neck", (.18 * scale, .18 * scale, .15 * scale), (0, 0, 2.00 * scale), "skin", "Neck"), ("Head", (.42 * scale * head, .42 * scale * head, .42 * scale * head), (0, 0, 2.30 * scale), "skin", "Head"),
+        ("UpperArm.L", (.22 * scale, .22 * scale, arm_length), (-shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.L"), ("Forearm.L", (.20 * scale, .20 * scale, arm_length * .9375), (-shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.L"), ("Hand.L", (.22 * scale, .22 * scale, .18 * scale), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.L"),
+        ("UpperArm.R", (.22 * scale, .22 * scale, arm_length), (shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.R"), ("Forearm.R", (.20 * scale, .20 * scale, arm_length * .9375), (shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.R"), ("Hand.R", (.22 * scale, .22 * scale, .18 * scale), (shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.R"),
+        ("UpperLeg.L", (.23 * scale * body, .24 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.L"), ("LowerLeg.L", (.21 * scale * body, .22 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.L"), ("Foot.L", (.25 * scale * body, .45 * scale, .16 * scale), (-leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.L"),
+        ("Toe.L", (.20 * scale * body, .20 * scale, .10 * scale), (-leg_x, .45 * scale, .90 * scale - leg_length * 2), "shoes", "Toe.L"),
+        ("UpperLeg.R", (.23 * scale * body, .24 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.R"), ("LowerLeg.R", (.21 * scale * body, .22 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.R"), ("Foot.R", (.25 * scale * body, .45 * scale, .16 * scale), (leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.R"),
+        ("Toe.R", (.20 * scale * body, .20 * scale, .10 * scale), (leg_x, .45 * scale, .90 * scale - leg_length * 2), "shoes", "Toe.R"),
+    ]
 
 
 def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]:
@@ -70,14 +153,9 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     leg_x = .17 * scale * p["body_width"]
     arm_length = .48 * scale * p["arm_length"]
     leg_length = .50 * scale * p["leg_length"]
-    bones = {
-        "Hips": ((0, 0, .90 * scale), (0, 0, 1.15 * scale), None), "Chest": ((0, 0, 1.15 * scale), (0, 0, 1.95 * scale), "Hips"),
-        "Neck": ((0, 0, 1.95 * scale), (0, 0, 2.05 * scale), "Chest"), "Head": ((0, 0, 2.05 * scale), (0, 0, 2.56 * scale), "Neck"),
-        "UpperArm.L": ((-shoulder, 0, 1.92 * scale), (-shoulder, 0, 1.92 * scale - arm_length), "Chest"), "Forearm.L": ((-shoulder, 0, 1.92 * scale - arm_length), (-shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.L"), "Hand.L": ((-shoulder, 0, 1.92 * scale - arm_length * 2), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.L"),
-        "UpperArm.R": ((shoulder, 0, 1.92 * scale), (shoulder, 0, 1.92 * scale - arm_length), "Chest"), "Forearm.R": ((shoulder, 0, 1.92 * scale - arm_length), (shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.R"), "Hand.R": ((shoulder, 0, 1.92 * scale - arm_length * 2), (shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.R"),
-        "UpperLeg.L": ((-leg_x, 0, .90 * scale), (-leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.L": ((-leg_x, 0, .90 * scale - leg_length), (-leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.L"), "Foot.L": ((-leg_x, 0, .90 * scale - leg_length * 2), (-leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.L"),
-        "UpperLeg.R": ((leg_x, 0, .90 * scale), (leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.R": ((leg_x, 0, .90 * scale - leg_length), (leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.R"), "Foot.R": ((leg_x, 0, .90 * scale - leg_length * 2), (leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.R"),
-    }
+    extended = config.get("rig_type") == "extended"
+    bones = (_extended_bones if extended else _standard_bones)(scale, shoulder, leg_x, arm_length, leg_length)
+
     bpy.ops.object.armature_add(enter_editmode=True, location=(0, 0, 0))
     armature = bpy.context.object
     armature.name = str(config.get("rig_root_name") or f"{config['character_id']}_Armature")
@@ -95,14 +173,7 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     body = p["body_width"]
     torso = p["torso_length"]
     head = p["head_scale"]
-    parts = [
-        ("Hips", (.55 * scale * body, .28 * scale, .25 * scale), (0, 0, 1.00 * scale), "bottom", "Hips"), ("Torso", (.60 * scale * body, .30 * scale, .80 * scale * torso), (0, 0, 1.55 * scale), "top", "Chest"),
-        ("Neck", (.18 * scale, .18 * scale, .15 * scale), (0, 0, 2.00 * scale), "skin", "Neck"), ("Head", (.42 * scale * head, .42 * scale * head, .42 * scale * head), (0, 0, 2.30 * scale), "skin", "Head"),
-        ("UpperArm.L", (.22 * scale, .22 * scale, arm_length), (-shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.L"), ("Forearm.L", (.20 * scale, .20 * scale, arm_length * .9375), (-shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.L"), ("Hand.L", (.22 * scale, .22 * scale, .18 * scale), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.L"),
-        ("UpperArm.R", (.22 * scale, .22 * scale, arm_length), (shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.R"), ("Forearm.R", (.20 * scale, .20 * scale, arm_length * .9375), (shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.R"), ("Hand.R", (.22 * scale, .22 * scale, .18 * scale), (shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.R"),
-        ("UpperLeg.L", (.23 * scale * body, .24 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.L"), ("LowerLeg.L", (.21 * scale * body, .22 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.L"), ("Foot.L", (.25 * scale * body, .45 * scale, .16 * scale), (-leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.L"),
-        ("UpperLeg.R", (.23 * scale * body, .24 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.R"), ("LowerLeg.R", (.21 * scale * body, .22 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.R"), ("Foot.R", (.25 * scale * body, .45 * scale, .16 * scale), (leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.R"),
-    ]
+    parts = (_extended_parts if extended else _standard_parts)(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head)
     objects = []
     for name, size, position, material_key, bone_name in parts:
         bpy.ops.mesh.primitive_cube_add(size=1, location=position)

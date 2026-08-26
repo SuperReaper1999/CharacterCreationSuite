@@ -5,17 +5,64 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from character_config import EXTENDED_CLIP_SUFFIX
+
 
 def r(x: float, y: float = 0.0, z: float = 0.0) -> tuple[float, float, float]:
     return math.radians(x), math.radians(y), math.radians(z)
 
 
 def clips() -> dict[str, dict[str, Any]]:
-    """Built-in clips, overlaid with any user-saved preset animations from
+    """Built-in clips (each with an Extended-suffixed sibling for rig_type
+    "extended"), overlaid with any user-saved preset animations from
     presets/animations/ (see custom_clips.py) so a preset with the same
-    name as a built-in deliberately replaces it."""
+    name deliberately replaces a built-in."""
     from custom_clips import list_custom_clips
-    return {**_builtin_clips(), **list_custom_clips()}
+    builtin = _builtin_clips()
+    return {**builtin, **_extended_clips(builtin), **list_custom_clips()}
+
+
+def _extend_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple[float, float, float]]:
+    """Redistribute a standard-rig pose onto the extended rig's extra
+    joints, without changing any of the original bones' values.
+
+    Chest's rotation is split across Spine/Chest/UpperChest (fractions
+    0.35/0.35/0.30, summing to 1) so a torso lean or twist reads as a
+    curved spine instead of one rigid hinge — the cumulative bend at the
+    top of the chain still matches the original Chest rotation exactly,
+    since the three segments are a serial chain and their local rotations
+    add. Shoulder and Toe get a fraction of whichever axis UpperArm/Foot
+    use (falling back to LowerLeg for Toe when a clip doesn't key Foot),
+    as a subtle follow-through rather than an independently authored pose.
+    """
+    extended = dict(pose)
+    if "Chest" in pose:
+        x, y, z = pose["Chest"]
+        extended["Spine"] = (x * 0.35, y * 0.35, z * 0.35)
+        extended["Chest"] = (x * 0.35, y * 0.35, z * 0.35)
+        extended["UpperChest"] = (x * 0.30, y * 0.30, z * 0.30)
+    for side in ("L", "R"):
+        upper_arm = pose.get(f"UpperArm.{side}")
+        if upper_arm:
+            extended[f"Shoulder.{side}"] = tuple(component * 0.15 for component in upper_arm)
+        foot = pose.get(f"Foot.{side}")
+        lower_leg = pose.get(f"LowerLeg.{side}")
+        if foot:
+            extended[f"Toe.{side}"] = tuple(component * 0.4 for component in foot)
+        elif lower_leg:
+            extended[f"Toe.{side}"] = tuple(component * 0.15 for component in lower_leg)
+    return extended
+
+
+def _extended_clips(builtin: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        f"{name}{EXTENDED_CLIP_SUFFIX}": {
+            "frames": clip["frames"],
+            "loop": clip["loop"],
+            "poses": {frame: _extend_pose(pose) for frame, pose in clip["poses"].items()},
+        }
+        for name, clip in builtin.items()
+    }
 
 
 def _builtin_clips() -> dict[str, dict[str, Any]]:
