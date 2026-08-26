@@ -19,10 +19,12 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 
 The player preset includes two distinct two-handed tool clips: `MeleeAttack` for the sledgehammer and `HarvestSwing` for pickaxes, axes, and shovels. Both preserve a credible support-hand pose; gameplay should apply the harvest at `HarvestSwing` frame 16 (0.5 seconds at 30fps).
 
+`Crouch` and `Prone` are available as selectable clips in the Animations tab (off by default, same as `ZombieAttack` — check the box to include them in a build). `Prone` pitches the whole rig ~horizontal around the hip bone's rest height rather than lying flat on the ground: because clips are rotation-only (see below), the pose cannot carry the downward offset needed to put the body at ground level. For a 1.75 m-tall character the hip pivot sits at `target_height_m * (0.90 / 2.69)` ≈ 0.59 m, so the posed body floats roughly between 0.40 m and 1.00 m off the ground until the Unity side lowers the character's root transform (and collider height) by that offset while the Prone state is active — the same way Unity, not the clip, already owns all root positioning here.
+
 ## Design boundaries
 
 - Fixed 16-bone humanoid hierarchy; proportions, materials, height, and clip selection are configurable.
-- Every generated clip has rotation-only bone keys. Root translation/root motion is never authored.
+- Every generated clip has rotation-only bone keys. Root translation/root motion is never authored — this is why `Prone` needs a Unity-side root offset rather than being baked into the clip (see above).
 - Unity Animation Events remain Unity-side concerns and are intentionally not generated.
 - FBX export uses the known Unity settings: `-Z` forward, `Y` up, all Actions as Takes, and no leaf bones.
 - The original `create_character_and_animations.py` and `create_zombie_and_animations.py` are retained unchanged as legacy references until this suite has been tested in Unity.

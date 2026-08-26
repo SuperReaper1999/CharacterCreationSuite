@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 1
-SUPPORTED_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "ZombieAttack")
+SUPPORTED_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "Prone", "ZombieAttack")
 
 
 def default_config() -> dict[str, Any]:

@@ -43,5 +43,23 @@ def clips() -> dict[str, dict[str, Any]]:
         }},
         "Fire": {"frames": 12, "loop": False, "poses": {1: {}, 3: {"UpperArm.R": r(-18), "Forearm.R": r(-12), "Chest": r(-4)}, 12: {}}},
         "Sit": {"frames": 30, "loop": True, "poses": {1: {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "UpperArm.L": r(25), "UpperArm.R": r(25), "Forearm.L": r(55), "Forearm.R": r(55), "Chest": r(8)}, 15: {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "UpperArm.L": r(25), "UpperArm.R": r(25), "Forearm.L": r(55), "Forearm.R": r(55), "Chest": r(9), "Head": r(-1)}, 30: {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "UpperArm.L": r(25), "UpperArm.R": r(25), "Forearm.L": r(55), "Forearm.R": r(55), "Chest": r(8)}}},
+        # Held combat crouch: hips back, knees bent, torso braced forward.
+        # Rig-relative only, like every other clip here — feet do not plant
+        # in place since there is no IK, matching the fidelity of Jump/Sit.
+        "Crouch": {"frames": 30, "loop": True, "poses": {
+            1: {"UpperLeg.L": r(-48), "UpperLeg.R": r(-48), "LowerLeg.L": r(70), "LowerLeg.R": r(70), "Chest": r(10), "UpperArm.L": r(-18), "UpperArm.R": r(-18), "Forearm.L": r(25), "Forearm.R": r(25)},
+            15: {"UpperLeg.L": r(-48), "UpperLeg.R": r(-48), "LowerLeg.L": r(70), "LowerLeg.R": r(70), "Chest": r(11), "UpperArm.L": r(-18), "UpperArm.R": r(-18), "Forearm.L": r(25), "Forearm.R": r(25), "Head": r(-1)},
+            30: {"UpperLeg.L": r(-48), "UpperLeg.R": r(-48), "LowerLeg.L": r(70), "LowerLeg.R": r(70), "Chest": r(10), "UpperArm.L": r(-18), "UpperArm.R": r(-18), "Forearm.L": r(25), "Forearm.R": r(25)},
+        }},
+        # Held prone: Hips pitches the whole rig ~horizontal, head counter-
+        # rotated up to look forward. Rotation-only, so this pivots around
+        # the hip bone's rest height rather than lying flat on the ground —
+        # see README "Design boundaries" for what the Unity side must do
+        # about that before this is usable as an actual prone stance.
+        "Prone": {"frames": 30, "loop": True, "poses": {
+            1: {"Hips": r(80), "Forearm.L": r(-15), "Forearm.R": r(-15), "Head": r(-25)},
+            15: {"Hips": r(80), "Forearm.L": r(-15), "Forearm.R": r(-15), "Head": r(-24)},
+            30: {"Hips": r(80), "Forearm.L": r(-15), "Forearm.R": r(-15), "Head": r(-25)},
+        }},
         "ZombieAttack": {"frames": 30, "loop": False, "poses": {1: {"Chest": r(10)}, 8: {"Chest": r(-18), "UpperArm.L": r(-55), "UpperArm.R": r(-55), "Forearm.L": r(-35), "Forearm.R": r(-35)}, 15: {"Chest": r(28), "UpperArm.L": r(70), "UpperArm.R": r(70), "Forearm.L": r(20), "Forearm.R": r(20)}, 23: {"Chest": r(8), "UpperArm.L": r(18), "UpperArm.R": r(18)}, 30: {"Chest": r(10)}}},
     }
