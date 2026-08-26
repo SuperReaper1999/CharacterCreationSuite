@@ -18,6 +18,7 @@ Two rig types are supported (config["rig_type"]):
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import bpy
@@ -131,8 +132,35 @@ def _finger_parts(scale, shoulder, arm_length, side):
             center = tuple((point[axis] + end[axis]) / 2 for axis in range(3))
             size = (box, box, max(abs(direction[2]) * fraction, box))
             name = f"{finger}{index}.{side}"
-            parts.append((name, size, center, "skin", name))
+            parts.append((name, size, center, "skin", name, "cylinder"))
             point = end
+    return parts
+
+
+# Fixed, non-configurable — an eye/pupil/mouth colour isn't a clothing
+# choice the way skin/top/bottom/shoes are, so these don't go through
+# config["materials"] at all.
+_EYE_WHITE_COLOR = (0.92, 0.92, 0.88, 1.0)
+_EYE_DARK_COLOR = (0.05, 0.05, 0.07, 1.0)
+
+
+def _face_parts(scale, head_scale_factor):
+    """Eyes, nose, and mouth on the Head — bound directly to the Head bone
+    (no separate bones), since these don't need to move independently of
+    the head itself."""
+    head_z = 2.30 * scale
+    half = .21 * scale * head_scale_factor
+    eye_z = head_z + 0.12 * half
+    eye_x = 0.40 * half
+    white_diameter = 0.32 * half
+    pupil_diameter = 0.16 * half
+    parts = [
+        ("Nose", (0.20 * half, 0.24 * half, 0.20 * half), (0, half + 0.10 * half, head_z - 0.05 * half), "skin", "Head", "cone_forward"),
+        ("Mouth", (0.42 * half, 0.05 * half, 0.09 * half), (0, half, head_z - 0.42 * half), "eye_dark", "Head", "cube"),
+    ]
+    for side, sign in (("L", -1), ("R", 1)):
+        parts.append((f"Eye.{side}", (white_diameter, white_diameter, white_diameter), (sign * eye_x, half + white_diameter * 0.35, eye_z), "eye_white", "Head", "sphere"))
+        parts.append((f"Pupil.{side}", (pupil_diameter, pupil_diameter, pupil_diameter), (sign * eye_x, half + white_diameter * 0.75, eye_z), "eye_dark", "Head", "sphere"))
     return parts
 
 
@@ -187,16 +215,17 @@ def _extended_parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso,
         ("Spine", (.58 * scale * body, .29 * scale, .20 * scale * torso), (0, 0, 1.25 * scale), "top", "Spine"),
         ("Chest", (.60 * scale * body, .30 * scale, .30 * scale * torso), (0, 0, 1.50 * scale), "top", "Chest"),
         ("UpperChest", (.60 * scale * body, .30 * scale, .30 * scale * torso), (0, 0, 1.80 * scale), "top", "UpperChest"),
-        ("Neck", (.18 * scale, .18 * scale, .15 * scale), (0, 0, 2.00 * scale), "skin", "Neck"), ("Head", (.42 * scale * head, .42 * scale * head, .42 * scale * head), (0, 0, 2.30 * scale), "skin", "Head"),
-        ("UpperArm.L", (.22 * scale, .22 * scale, arm_length), (-shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.L"), ("Forearm.L", (.20 * scale, .20 * scale, arm_length * .9375), (-shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.L"), ("Hand.L", (.22 * scale, .22 * scale, .18 * scale), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.L"),
-        ("UpperArm.R", (.22 * scale, .22 * scale, arm_length), (shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.R"), ("Forearm.R", (.20 * scale, .20 * scale, arm_length * .9375), (shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.R"), ("Hand.R", (.22 * scale, .22 * scale, .18 * scale), (shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.R"),
-        ("UpperLeg.L", (.23 * scale * body, .24 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.L"), ("LowerLeg.L", (.21 * scale * body, .22 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.L"), ("Foot.L", (.25 * scale * body, .45 * scale, .16 * scale), (-leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.L"),
-        ("Toe.L", (.20 * scale * body, .20 * scale, .10 * scale), (-leg_x, .45 * scale, .90 * scale - leg_length * 2), "shoes", "Toe.L"),
-        ("UpperLeg.R", (.23 * scale * body, .24 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.R"), ("LowerLeg.R", (.21 * scale * body, .22 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.R"), ("Foot.R", (.25 * scale * body, .45 * scale, .16 * scale), (leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.R"),
-        ("Toe.R", (.20 * scale * body, .20 * scale, .10 * scale), (leg_x, .45 * scale, .90 * scale - leg_length * 2), "shoes", "Toe.R"),
+        ("Neck", (.18 * scale, .18 * scale, .15 * scale), (0, 0, 2.00 * scale), "skin", "Neck", "cylinder"), ("Head", (.42 * scale * head, .40 * scale * head, .46 * scale * head), (0, 0, 2.30 * scale), "skin", "Head", "sphere"),
+        ("UpperArm.L", (.22 * scale, .22 * scale, arm_length), (-shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.L", "cylinder"), ("Forearm.L", (.20 * scale, .20 * scale, arm_length * .9375), (-shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.L", "cylinder"), ("Hand.L", (.22 * scale, .22 * scale, .18 * scale), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.L"),
+        ("UpperArm.R", (.22 * scale, .22 * scale, arm_length), (shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.R", "cylinder"), ("Forearm.R", (.20 * scale, .20 * scale, arm_length * .9375), (shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.R", "cylinder"), ("Hand.R", (.22 * scale, .22 * scale, .18 * scale), (shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.R"),
+        ("UpperLeg.L", (.23 * scale * body, .24 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.L", "cylinder"), ("LowerLeg.L", (.21 * scale * body, .22 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.L", "cylinder"), ("Foot.L", (.25 * scale * body, .45 * scale, .16 * scale), (-leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.L"),
+        ("Toe.L", (.20 * scale * body, .20 * scale, .10 * scale), (-leg_x, .45 * scale, .90 * scale - leg_length * 2), "shoes", "Toe.L", "cylinder"),
+        ("UpperLeg.R", (.23 * scale * body, .24 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.R", "cylinder"), ("LowerLeg.R", (.21 * scale * body, .22 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.R", "cylinder"), ("Foot.R", (.25 * scale * body, .45 * scale, .16 * scale), (leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.R"),
+        ("Toe.R", (.20 * scale * body, .20 * scale, .10 * scale), (leg_x, .45 * scale, .90 * scale - leg_length * 2), "shoes", "Toe.R", "cylinder"),
     ]
     parts += _finger_parts(scale, shoulder, arm_length, "L")
     parts += _finger_parts(scale, shoulder, arm_length, "R")
+    parts += _face_parts(scale, head)
     return parts
 
 
@@ -215,7 +244,12 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
             bsdf.inputs["Roughness"].default_value = 0.72
         return result
 
+    extended = config.get("rig_type") == "extended"
     materials = {name: mat(f"{config['character_id']}_{name}", color) for name, color in config["materials"].items()}
+    if extended:
+        # Fixed face colours, not part of the user's configurable palette.
+        materials["eye_white"] = mat(f"{config['character_id']}_eye_white", _EYE_WHITE_COLOR)
+        materials["eye_dark"] = mat(f"{config['character_id']}_eye_dark", _EYE_DARK_COLOR)
     # This is the legacy Player rig authored at 2.69m, preserved exactly as
     # the default suite shape. Customisation is deliberately layered on it;
     # it never reconstructs the rest pose from a different coordinate model.
@@ -225,7 +259,6 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     leg_x = .17 * scale * p["body_width"]
     arm_length = .48 * scale * p["arm_length"]
     leg_length = .50 * scale * p["leg_length"]
-    extended = config.get("rig_type") == "extended"
     bones = (_extended_bones if extended else _standard_bones)(scale, shoulder, leg_x, arm_length, leg_length)
 
     bpy.ops.object.armature_add(enter_editmode=True, location=(0, 0, 0))
@@ -247,8 +280,18 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     head = p["head_scale"]
     parts = (_extended_parts if extended else _standard_parts)(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head)
     objects = []
-    for name, size, position, material_key, bone_name in parts:
-        bpy.ops.mesh.primitive_cube_add(size=1, location=position)
+    for part in parts:
+        name, size, position, material_key, bone_name = part[:5]
+        shape = part[5] if len(part) > 5 else "cube"
+        if shape == "cylinder":
+            bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=1, depth=1, location=position)
+        elif shape == "sphere":
+            bpy.ops.mesh.primitive_uv_sphere_add(segments=12, ring_count=8, radius=1, location=position)
+        elif shape == "cone_forward":
+            bpy.ops.mesh.primitive_cone_add(vertices=8, radius1=1, radius2=0, depth=1, location=position)
+            bpy.context.object.rotation_euler = (math.radians(-90), 0, 0)
+        else:
+            bpy.ops.mesh.primitive_cube_add(size=1, location=position)
         obj = bpy.context.object; obj.name = name; obj.dimensions = size
         bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
         obj.data.materials.append(materials[material_key])
@@ -260,6 +303,27 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     bpy.context.view_layer.objects.active = objects[0]
     bpy.ops.object.join()
     mesh = bpy.context.object; mesh.name = f"{config['character_id']}_Mesh"; mesh.parent = armature
+
+    if extended:
+        # Cylindrical limbs/digits plus a bevel and smooth shading on the
+        # whole mesh — softens the LEGO-block look without touching the
+        # standard rig's geometry at all. Added before the Armature
+        # modifier so it bevels the rest-pose mesh once; the Armature
+        # modifier then deforms that already-beveled result per frame,
+        # rather than re-bevelling posed (and possibly self-intersecting)
+        # geometry on every frame.
+        bpy.ops.object.shade_smooth()
+        bevel = mesh.modifiers.new(name="Bevel", type="BEVEL")
+        # PERCENT scales the bevel to each edge's own length, so one
+        # modifier rounds both the torso boxes and the tiny finger
+        # segments proportionally — a fixed absolute width sized for the
+        # torso would swallow a whole finger segment, and one sized for
+        # fingers would barely dent the torso.
+        bevel.offset_type = "PERCENT"
+        bevel.width = 25
+        bevel.segments = 3
+        bevel.limit_method = "ANGLE"
+
     modifier = mesh.modifiers.new(name="Armature", type="ARMATURE"); modifier.object = armature
 
     return armature, mesh, bones
