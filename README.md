@@ -8,6 +8,8 @@ generated Blender GLB remains the authoritative final geometry preview.
 
 Each clip in the Animations tab has a **View anim in Blender** button. It opens an interactive Blender window on the character as currently configured in the tabs (proportions, materials, height) with that one clip baked and looping, so you can orbit and inspect it before committing to a build — it's the exact same rig code path as the real export (`rig_builder.py`), not a separate stand-in. Close the window when you're done; it only writes a scratch `build/_preview/character_config.json`, never anything under the character's own `build/<character-id>/` output folder.
 
+The preview window is also an editor. Enter Pose Mode, adjust the bones, insert keyframes as usual (`I` with all bones selected keys the whole pose, matching how every clip here is authored), then use the **Character Suite** panel in the 3D viewport's side tab (`N`) to name it and hit **Save as Preset Animation**. That samples every frame that has a keyframe on any bone and writes a rotation-only JSON to `presets/animations/<name>.json` — reusing that same name overrides a built-in clip of the same name (you'll get a warning, not a block); a new name adds a new one. Saving is rejected if the action has any location/scale keys, so the rotation-only contract below can't be broken from the editor either. Back in the suite, click **Refresh clip list** (or reload a config) to pick up anything saved or changed since the window opened.
+
 The suite writes all generated output to `build/<character-id>/`:
 
 - `<character-id>.fbx` — Unity import asset with selected animation Takes baked in (unchanged legacy artifact).

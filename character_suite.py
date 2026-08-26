@@ -11,7 +11,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
 
-from character_config import SUPPORTED_CLIPS, default_config, load_config, safe_id, save_config, validate_config
+from character_config import default_config, load_config, safe_id, save_config, supported_clips, validate_config
 
 ROOT = Path(__file__).resolve().parent
 
@@ -65,12 +65,11 @@ class CharacterSuite:
             ttk.Button(materials, text="Pick colour", command=lambda name=label: self.pick_colour(name)).grid(row=row, column=5, padx=(9, 4))
             swatch = tk.Label(materials, width=5, relief=tk.SUNKEN); swatch.grid(row=row, column=6, padx=3); self.color_swatches[label] = swatch
         ttk.Label(materials, text="RGBA channels use 0–1 values. Materials are procedural; no texture files are required.", wraplength=650).grid(row=6, column=0, columnspan=5, sticky="w", pady=(18, 0))
-        ttk.Label(animations, text="Select rotation-only clips to bake as FBX Takes. Root translation and Animation Events are deliberately unavailable.", wraplength=680).pack(anchor="w", pady=(0, 12))
-        for clip in SUPPORTED_CLIPS:
-            var = tk.BooleanVar(); self.clip_vars[clip] = var
-            row = ttk.Frame(animations); row.pack(fill="x", pady=3)
-            ttk.Checkbutton(row, text=clip, variable=var).pack(side="left")
-            ttk.Button(row, text="View anim in Blender", command=lambda clip=clip: self.preview_clip(clip)).pack(side="left", padx=(10, 0))
+        header = ttk.Frame(animations); header.pack(fill="x", pady=(0, 12))
+        ttk.Label(header, text="Select rotation-only clips to bake as FBX Takes. Root translation and Animation Events are deliberately unavailable.", wraplength=560).pack(side="left")
+        ttk.Button(header, text="Refresh clip list", command=self.refresh_clips).pack(side="right")
+        ttk.Label(animations, text="Edit a clip's pose in the Blender preview, then save it there as a preset — it shows up here after Refresh.", wraplength=680, foreground="#5a6b8c").pack(anchor="w", pady=(0, 10))
+        self.clip_rows_frame = ttk.Frame(animations); self.clip_rows_frame.pack(fill="both", expand=True)
         self.log = tk.Text(output, height=27, wrap="word", state="disabled", background="#151922", foreground="#e6edf3"); self.log.pack(fill="both", expand=True)
         ttk.Label(self.root, textvariable=self.status, relief=tk.SUNKEN, anchor="w", padding=(8, 4)).grid(row=2, column=0, sticky="ew")
 
@@ -127,8 +126,23 @@ class CharacterSuite:
         rect(base_x, neck_y - head * .55, head, head, skin)
         for name, swatch in self.color_swatches.items(): swatch.configure(background=self._hex_colour(name))
 
+    def _build_clip_rows(self) -> None:
+        previously_checked = {clip for clip, value in self.clip_vars.items() if value.get()}
+        for child in self.clip_rows_frame.winfo_children(): child.destroy()
+        self.clip_vars = {}
+        for clip in supported_clips():
+            var = tk.BooleanVar(value=clip in previously_checked); self.clip_vars[clip] = var
+            row = ttk.Frame(self.clip_rows_frame); row.pack(fill="x", pady=3)
+            ttk.Checkbutton(row, text=clip, variable=var).pack(side="left")
+            ttk.Button(row, text="View anim in Blender", command=lambda clip=clip: self.preview_clip(clip)).pack(side="left", padx=(10, 0))
+
+    def refresh_clips(self) -> None:
+        self._build_clip_rows()
+        self.status.set("Refreshed clip list from presets/animations/.")
+
     def load_state(self, config: dict) -> None:
         config = validate_config(config)
+        self._build_clip_rows()
         for key, value in self.vars.items(): value.set(str(config[key]))
         for key, value in self.proportions.items(): value.set(str(config["proportions"][key]))
         for key, values in self.colors.items():

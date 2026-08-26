@@ -11,6 +11,14 @@ def r(x: float, y: float = 0.0, z: float = 0.0) -> tuple[float, float, float]:
 
 
 def clips() -> dict[str, dict[str, Any]]:
+    """Built-in clips, overlaid with any user-saved preset animations from
+    presets/animations/ (see custom_clips.py) so a preset with the same
+    name as a built-in deliberately replaces it."""
+    from custom_clips import list_custom_clips
+    return {**_builtin_clips(), **list_custom_clips()}
+
+
+def _builtin_clips() -> dict[str, dict[str, Any]]:
     run = {}
     for frame, phase in ((1, 1), (9, 0), (16, -1), (24, 0), (31, 1)):
         pose = {"Chest": r(6)}

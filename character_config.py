@@ -9,7 +9,20 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 1
-SUPPORTED_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "Prone", "ZombieAttack")
+BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "Prone", "ZombieAttack")
+BONE_NAMES = (
+    "Hips", "Chest", "Neck", "Head",
+    "UpperArm.L", "Forearm.L", "Hand.L", "UpperArm.R", "Forearm.R", "Hand.R",
+    "UpperLeg.L", "LowerLeg.L", "Foot.L", "UpperLeg.R", "LowerLeg.R", "Foot.R",
+)
+
+
+def supported_clips() -> tuple[str, ...]:
+    """Built-in clips plus any user-saved preset animations (see custom_clips.py),
+    in that order, de-duplicated so a preset can deliberately override a built-in
+    of the same name."""
+    from custom_clips import custom_clip_names
+    return tuple(dict.fromkeys((*BUILTIN_CLIPS, *custom_clip_names())))
 
 
 def default_config() -> dict[str, Any]:
@@ -63,7 +76,8 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
             value = fallback
         config["materials"][key] = [_number(channel, 0.0, 1.0, fallback[index]) for index, channel in enumerate(value)]
     selected = raw.get("clips", default_config()["clips"])
-    config["clips"] = [clip for clip in selected if clip in SUPPORTED_CLIPS] if isinstance(selected, list) else []
+    available_clips = supported_clips()
+    config["clips"] = [clip for clip in selected if clip in available_clips] if isinstance(selected, list) else []
     if not config["clips"]:
         config["clips"] = ["Idle"]
     config["version"] = CONFIG_VERSION
