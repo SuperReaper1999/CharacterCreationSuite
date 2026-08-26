@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 1
-BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "Prone", "ZombieAttack")
+BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "ZombieAttack")
 BONE_NAMES = (
     "Hips", "Chest", "Neck", "Head",
     "UpperArm.L", "Forearm.L", "Hand.L", "UpperArm.R", "Forearm.R", "Hand.R",
