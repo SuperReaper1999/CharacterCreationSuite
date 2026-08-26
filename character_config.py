@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 1
-SUPPORTED_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "Fire", "Sit", "ZombieAttack")
+SUPPORTED_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "ZombieAttack")
 
 
 def default_config() -> dict[str, Any]:
@@ -24,9 +24,10 @@ def default_config() -> dict[str, Any]:
             "skin": [0.90, 0.65, 0.45, 1.0], "top": [0.10, 0.35, 0.90, 1.0],
             "bottom": [0.05, 0.05, 0.12, 1.0], "shoes": [0.02, 0.02, 0.02, 1.0],
         },
-        "clips": ["Idle", "Run", "Jump", "MeleeAttack", "Fire", "Sit"],
+        "clips": ["Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit"],
         "output_root": "build",
         "export_preview_glb": True,
+        "export_separate_animations": True,
     }
 
 
@@ -51,6 +52,7 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     config["target_height_m"] = _number(config["target_height_m"], 0.8, 2.8, 1.75)
     config["output_root"] = str(config["output_root"] or "build")
     config["export_preview_glb"] = bool(config["export_preview_glb"])
+    config["export_separate_animations"] = bool(config["export_separate_animations"])
     proportions = raw.get("proportions", {}) if isinstance(raw.get("proportions", {}), dict) else {}
     config["proportions"] = {key: _number(proportions.get(key, value), 0.55, 1.8, value) for key, value in default_config()["proportions"].items()}
     materials = raw.get("materials", {}) if isinstance(raw.get("materials", {}), dict) else {}

@@ -13,6 +13,8 @@ The suite writes all generated output to `build/<character-id>/`:
 - `character_config.json` — reproducible build configuration.
 - `manifest.json` — generated asset contract and validation metadata.
 
+The player preset includes two distinct two-handed tool clips: `MeleeAttack` for the sledgehammer and `HarvestSwing` for pickaxes, axes, and shovels. Both preserve a credible support-hand pose; gameplay should apply the harvest at `HarvestSwing` frame 16 (0.5 seconds at 30fps).
+
 ## Design boundaries
 
 - Fixed 16-bone humanoid hierarchy; proportions, materials, height, and clip selection are configurable.
