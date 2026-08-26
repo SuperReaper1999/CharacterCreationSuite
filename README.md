@@ -6,6 +6,8 @@ The Character tab includes a fast live silhouette preview for proportions and
 palette changes. The Materials tab has native colour pickers and swatches; the
 generated Blender GLB remains the authoritative final geometry preview.
 
+Each clip in the Animations tab has a **View anim in Blender** button. It opens an interactive Blender window on the character as currently configured in the tabs (proportions, materials, height) with that one clip baked and looping, so you can orbit and inspect it before committing to a build — it's the exact same rig code path as the real export (`rig_builder.py`), not a separate stand-in. Close the window when you're done; it only writes a scratch `build/_preview/character_config.json`, never anything under the character's own `build/<character-id>/` output folder.
+
 The suite writes all generated output to `build/<character-id>/`:
 
 - `<character-id>.fbx` — Unity import asset with selected animation Takes baked in (unchanged legacy artifact).

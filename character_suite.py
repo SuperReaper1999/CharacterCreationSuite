@@ -67,7 +67,10 @@ class CharacterSuite:
         ttk.Label(materials, text="RGBA channels use 0–1 values. Materials are procedural; no texture files are required.", wraplength=650).grid(row=6, column=0, columnspan=5, sticky="w", pady=(18, 0))
         ttk.Label(animations, text="Select rotation-only clips to bake as FBX Takes. Root translation and Animation Events are deliberately unavailable.", wraplength=680).pack(anchor="w", pady=(0, 12))
         for clip in SUPPORTED_CLIPS:
-            var = tk.BooleanVar(); self.clip_vars[clip] = var; ttk.Checkbutton(animations, text=clip, variable=var).pack(anchor="w", pady=3)
+            var = tk.BooleanVar(); self.clip_vars[clip] = var
+            row = ttk.Frame(animations); row.pack(fill="x", pady=3)
+            ttk.Checkbutton(row, text=clip, variable=var).pack(side="left")
+            ttk.Button(row, text="View anim in Blender", command=lambda clip=clip: self.preview_clip(clip)).pack(side="left", padx=(10, 0))
         self.log = tk.Text(output, height=27, wrap="word", state="disabled", background="#151922", foreground="#e6edf3"); self.log.pack(fill="both", expand=True)
         ttk.Label(self.root, textvariable=self.status, relief=tk.SUNKEN, anchor="w", padding=(8, 4)).grid(row=2, column=0, sticky="ew")
 
@@ -146,6 +149,15 @@ class CharacterSuite:
 
     def _write_log(self, text: str) -> None:
         self.log.configure(state="normal"); self.log.insert("end", text); self.log.see("end"); self.log.configure(state="disabled")
+
+    def preview_clip(self, clip_name: str) -> None:
+        blender = find_blender()
+        if not blender: messagebox.showerror("Character Creation Suite", "Blender 5.0 was not found. Install Blender or add it to PATH."); return
+        config = self.state()
+        config_path = ROOT / config["output_root"] / "_preview" / "character_config.json"; save_config(config_path, config)
+        self.status.set(f"Opening {clip_name} preview in Blender…")
+        command = [blender, "--python", str(ROOT / "blender_preview.py"), "--", str(config_path), clip_name]
+        subprocess.Popen(command, cwd=ROOT)
 
     def generate(self) -> None:
         config = self.state(); blender = find_blender()
