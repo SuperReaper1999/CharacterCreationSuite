@@ -8,10 +8,14 @@ generated Blender GLB remains the authoritative final geometry preview.
 
 The suite writes all generated output to `build/<character-id>/`:
 
-- `<character-id>.fbx` — Unity import asset with selected animation Takes.
+- `<character-id>.fbx` — Unity import asset with selected animation Takes baked in (unchanged legacy artifact).
+- `<character-id>_Model.fbx` — the same mesh and rig with no animation, for pipelines that import the model and clips as separate Unity assets.
+- `Animations/<clip-name>.fbx` — one skeleton-only FBX per selected clip, no mesh. Each shares the exact bone names and hierarchy of `<character-id>_Model.fbx`, so Unity's "copy from other Avatar" retargeting maps cleanly onto the model.
 - `<character-id>_Preview.glb` — bind-pose preview, not the Unity animation asset.
 - `character_config.json` — reproducible build configuration.
-- `manifest.json` — generated asset contract and validation metadata.
+- `manifest.json` — generated asset contract and validation metadata, including `model_fbx` and `animation_fbx` paths.
+
+The model and per-clip animation FBX files are on by default (`export_separate_animations` in the config); set it to `false` to skip them and only produce the combined `<character-id>.fbx`.
 
 The player preset includes two distinct two-handed tool clips: `MeleeAttack` for the sledgehammer and `HarvestSwing` for pickaxes, axes, and shovels. Both preserve a credible support-hand pose; gameplay should apply the harvest at `HarvestSwing` frame 16 (0.5 seconds at 30fps).
 

@@ -160,7 +160,13 @@ def build(config_path: Path) -> None:
         animations_dir = output_dir / "Animations"
         animations_dir.mkdir(parents=True, exist_ok=True)
         for clip_name in config["clips"]:
-            armature.animation_data.action = bpy.data.actions[clip_name]
+            action = bpy.data.actions[clip_name]
+            armature.animation_data.action = action
+            # bake_anim_use_all_actions=False bakes over the scene frame
+            # range, not the action's own frame_start/frame_end, so it must
+            # be set per clip or every clip exports at the default 1-250.
+            bpy.context.scene.frame_start = int(action.frame_start)
+            bpy.context.scene.frame_end = int(action.frame_end)
             bpy.ops.object.select_all(action="DESELECT"); armature.select_set(True); bpy.context.view_layer.objects.active = armature
             clip_path = animations_dir / f"{clip_name}.fbx"
             bpy.ops.export_scene.fbx(filepath=str(clip_path), use_selection=True, object_types={"ARMATURE"}, axis_forward="-Z", axis_up="Y", add_leaf_bones=False, bake_anim=True, bake_anim_use_all_actions=False, bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True, bake_anim_step=1.0, bake_anim_simplify_factor=0.0)
