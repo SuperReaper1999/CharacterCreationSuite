@@ -12,6 +12,13 @@ def r(x: float, y: float = 0.0, z: float = 0.0) -> tuple[float, float, float]:
     return math.radians(x), math.radians(y), math.radians(z)
 
 
+# Relaxed-hand curl per segment (Proximal, Intermediate, Distal) — curls
+# more at the middle knuckle than the tip, like a hand actually at rest,
+# rather than an equal bend at every joint.
+_FINGER_CURL = (r(12), r(20), r(14))
+_THUMB_CURL = (r(8), r(14), r(10))
+
+
 def clips() -> dict[str, dict[str, Any]]:
     """Built-in clips (each with an Extended-suffixed sibling for rig_type
     "extended"), overlaid with any user-saved preset animations from
@@ -34,6 +41,9 @@ def _extend_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple
     add. Shoulder and Toe get a fraction of whichever axis UpperArm/Foot
     use (falling back to LowerLeg for Toe when a clip doesn't key Foot),
     as a subtle follow-through rather than an independently authored pose.
+    Fingers get a fixed relaxed-hand curl in every frame of every clip —
+    a static baseline rather than something reactive per pose, since nothing
+    upstream signals "gripping" vs "open hand" reliably enough to vary it.
     """
     extended = dict(pose)
     if "Chest" in pose:
@@ -51,6 +61,11 @@ def _extend_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple
             extended[f"Toe.{side}"] = tuple(component * 0.4 for component in foot)
         elif lower_leg:
             extended[f"Toe.{side}"] = tuple(component * 0.15 for component in lower_leg)
+        for finger in ("Index", "Middle", "Ring", "Little"):
+            for segment, curl in enumerate(_FINGER_CURL, start=1):
+                extended[f"{finger}{segment}.{side}"] = curl
+        for segment, curl in enumerate(_THUMB_CURL, start=1):
+            extended[f"Thumb{segment}.{side}"] = curl
     return extended
 
 

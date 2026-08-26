@@ -17,8 +17,11 @@ BONE_NAMES = (
     "UpperArm.L", "Forearm.L", "Hand.L", "UpperArm.R", "Forearm.R", "Hand.R",
     "UpperLeg.L", "LowerLeg.L", "Foot.L", "UpperLeg.R", "LowerLeg.R", "Foot.R",
 )
-# Bones that only exist on rig_type "extended" — see rig_builder.py.
-EXTENDED_ONLY_BONE_NAMES = ("Spine", "UpperChest", "Shoulder.L", "Shoulder.R", "Toe.L", "Toe.R")
+# Bones that only exist on rig_type "extended" — see rig_builder.py. Full
+# Unity Humanoid finger convention: 3 segments per finger (Proximal=1,
+# Intermediate=2, Distal=3), named "<Finger><segment>.<L|R>".
+FINGER_BONE_NAMES = tuple(f"{finger}{segment}.{side}" for side in ("L", "R") for finger in ("Thumb", "Index", "Middle", "Ring", "Little") for segment in (1, 2, 3))
+EXTENDED_ONLY_BONE_NAMES = ("Spine", "UpperChest", "Shoulder.L", "Shoulder.R", "Toe.L", "Toe.R") + FINGER_BONE_NAMES
 ALL_BONE_NAMES = BONE_NAMES + EXTENDED_ONLY_BONE_NAMES
 
 
