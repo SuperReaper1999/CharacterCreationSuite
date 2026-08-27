@@ -1,0 +1,13 @@
+{
+  "character_id": "Reeves",
+  "display_name": "Reeves",
+  "archetype": "npc",
+  "rig_type": "extended",
+  "target_height_m": 1.84,
+  "proportions": { "shoulder_width": 1.16, "torso_length": 1.08, "arm_length": 1.06, "leg_length": 1.02, "head_scale": 1.02, "body_width": 1.14 },
+  "materials": { "skin": [0.43, 0.27, 0.18, 1.0], "top": [0.23, 0.20, 0.13, 1.0], "bottom": [0.14, 0.17, 0.16, 1.0], "shoes": [0.06, 0.05, 0.04, 1.0] },
+  "clips": ["IdleExtended"],
+  "output_root": "build",
+  "export_preview_glb": true,
+  "export_separate_animations": true
+}

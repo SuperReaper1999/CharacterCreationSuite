@@ -1,0 +1,13 @@
+{
+  "character_id": "Summer",
+  "display_name": "Summer",
+  "archetype": "npc",
+  "rig_type": "extended",
+  "target_height_m": 1.68,
+  "proportions": { "shoulder_width": 0.84, "torso_length": 0.96, "arm_length": 0.94, "leg_length": 0.98, "head_scale": 0.95, "body_width": 0.84 },
+  "materials": { "skin": [0.72, 0.46, 0.31, 1.0], "top": [0.24, 0.48, 0.43, 1.0], "bottom": [0.15, 0.19, 0.22, 1.0], "shoes": [0.10, 0.08, 0.07, 1.0] },
+  "clips": ["IdleExtended"],
+  "output_root": "build",
+  "export_preview_glb": true,
+  "export_separate_animations": true
+}
