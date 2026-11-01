@@ -9,30 +9,29 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 1
-RIG_TYPES = ("standard", "extended")
 BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "ZombieAttack")
-EXTENDED_CLIP_SUFFIX = "Extended"
-BONE_NAMES = (
-    "Hips", "Chest", "Neck", "Head",
-    "UpperArm.L", "Forearm.L", "Hand.L", "UpperArm.R", "Forearm.R", "Hand.R",
-    "UpperLeg.L", "LowerLeg.L", "Foot.L", "UpperLeg.R", "LowerLeg.R", "Foot.R",
-)
-# Bones that only exist on rig_type "extended" — see rig_builder.py. Full
-# Unity Humanoid finger convention: 3 segments per finger (Proximal=1,
-# Intermediate=2, Distal=3), named "<Finger><segment>.<L|R>".
+# Suffix older configs used for the 52-bone versions of the built-in clips
+# (e.g. "IdleExtended"), from when a 16-bone rig also existed. Those
+# versions are now the only ones and use the plain names; validate_config
+# maps the old names over.
+LEGACY_CLIP_SUFFIX = "Extended"
+# The 52-bone rig built by rig_builder.py: body bones, then 3 segments per
+# finger (Proximal=1, Intermediate=2, Distal=3), named
+# "<Finger><segment>.<L|R>" (the Unity Humanoid finger convention).
 FINGER_BONE_NAMES = tuple(f"{finger}{segment}.{side}" for side in ("L", "R") for finger in ("Thumb", "Index", "Middle", "Ring", "Little") for segment in (1, 2, 3))
-EXTENDED_ONLY_BONE_NAMES = ("Spine", "UpperChest", "Shoulder.L", "Shoulder.R", "Toe.L", "Toe.R") + FINGER_BONE_NAMES
-ALL_BONE_NAMES = BONE_NAMES + EXTENDED_ONLY_BONE_NAMES
+BONE_NAMES = (
+    "Hips", "Spine", "Chest", "UpperChest", "Neck", "Head",
+    "Shoulder.L", "UpperArm.L", "Forearm.L", "Hand.L", "Shoulder.R", "UpperArm.R", "Forearm.R", "Hand.R",
+    "UpperLeg.L", "LowerLeg.L", "Foot.L", "Toe.L", "UpperLeg.R", "LowerLeg.R", "Foot.R", "Toe.R",
+) + FINGER_BONE_NAMES
 
 
 def supported_clips() -> tuple[str, ...]:
-    """Built-in clips (each with an Extended-suffixed sibling for rig_type
-    "extended" — see animation_library.py) plus any user-saved preset
+    """Built-in clips (see animation_library.py) plus any user-saved preset
     animations (see custom_clips.py), de-duplicated so a preset can
     deliberately override a built-in of the same name."""
     from custom_clips import custom_clip_names
-    builtin_and_extended = (*BUILTIN_CLIPS, *(f"{name}{EXTENDED_CLIP_SUFFIX}" for name in BUILTIN_CLIPS))
-    return tuple(dict.fromkeys((*builtin_and_extended, *custom_clip_names())))
+    return tuple(dict.fromkeys((*BUILTIN_CLIPS, *custom_clip_names())))
 
 
 def default_config() -> dict[str, Any]:
@@ -40,7 +39,6 @@ def default_config() -> dict[str, Any]:
         "version": CONFIG_VERSION,
         "character_id": "NewCharacter",
         "display_name": "New Character",
-        "rig_type": "standard",
         "target_height_m": 1.75,
         "proportions": {"shoulder_width": 1.0, "torso_length": 1.0, "arm_length": 1.0, "leg_length": 1.0, "head_scale": 1.0, "body_width": 1.0},
         "materials": {
@@ -66,6 +64,13 @@ def _number(value: Any, minimum: float, maximum: float, default: float) -> float
         return default
 
 
+def _current_clip_name(name: str) -> str:
+    """Map an older config's "<Clip>Extended" name to "<Clip>" when that
+    clip is built in; any other name (including custom clips) is kept."""
+    base = name[:-len(LEGACY_CLIP_SUFFIX)]
+    return base if name.endswith(LEGACY_CLIP_SUFFIX) and base in BUILTIN_CLIPS else name
+
+
 def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     config = default_config()
     config.update({key: value for key, value in raw.items() if key not in ("proportions", "materials", "clips")})
@@ -74,8 +79,9 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     # "archetype" was a label nothing read; it was removed. Drop it from
     # older configs so it isn't carried forward when they are re-saved.
     config.pop("archetype", None)
-    rig_type = str(config.get("rig_type", "standard")).lower()
-    config["rig_type"] = rig_type if rig_type in RIG_TYPES else "standard"
+    # "rig_type" chose between a 16-bone and the 52-bone rig; only the
+    # 52-bone rig remains, so older configs' value is dropped.
+    config.pop("rig_type", None)
     config["target_height_m"] = _number(config["target_height_m"], 0.8, 2.8, 1.75)
     config["output_root"] = str(config["output_root"] or "build")
     config["export_preview_glb"] = bool(config["export_preview_glb"])
@@ -91,7 +97,8 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
         config["materials"][key] = [_number(channel, 0.0, 1.0, fallback[index]) for index, channel in enumerate(value)]
     selected = raw.get("clips", default_config()["clips"])
     available_clips = supported_clips()
-    config["clips"] = [clip for clip in selected if clip in available_clips] if isinstance(selected, list) else []
+    selected = [_current_clip_name(str(clip)) for clip in selected] if isinstance(selected, list) else []
+    config["clips"] = [clip for clip in dict.fromkeys(selected) if clip in available_clips]
     if not config["clips"]:
         config["clips"] = ["Idle"]
     config["version"] = CONFIG_VERSION

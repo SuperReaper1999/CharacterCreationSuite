@@ -5,15 +5,12 @@ interactive per-clip preview (blender_preview.py), so both always build
 the exact same armature and skin from a config — there is only one place
 that defines what "the rig" is.
 
-Two rig types are supported (config["rig_type"]):
-- "standard" (default): the original fixed 16-bone humanoid.
-- "extended": the same skeleton with Spine, UpperChest, Shoulder.L/R,
-  Toe.L/R, and full 3-bone-per-finger hands (Thumb/Index/Middle/Ring/
-  Little, each split into Proximal/Intermediate/Distal — Unity's own
-  Humanoid finger convention, named "<Finger>1/2/3.<L|R>") added — all
-  standard bone names still exist at the same positions, so every clip
-  authored for "standard" bakes correctly on "extended" too; it just
-  leaves the new bones at rest.
+The rig is a fixed 52-bone humanoid: Hips, Spine/Chest/UpperChest, Neck,
+Head, Shoulder/UpperArm/Forearm/Hand per side, UpperLeg/LowerLeg/Foot/Toe
+per side, and full 3-bone-per-finger hands (Thumb/Index/Middle/Ring/Little,
+each split into Proximal/Intermediate/Distal, named "<Finger>1/2/3.<L|R>" —
+the Unity Humanoid finger convention). The mesh is built from cylinders,
+boxes and a sphere head with a simple face, then bevelled and smoothed.
 """
 
 from __future__ import annotations
@@ -39,9 +36,8 @@ def bake_pose_action(armature, clip_name: str, clip: dict[str, Any]):
     """Bake one clip's keyframed poses onto armature as a new Action.
 
     Bone names the clip references that don't exist on this armature are
-    skipped rather than raising — this is what lets an "Extended"-suffixed
-    clip (or a custom preset saved from the extended rig) be selected
-    safely even for a "standard" build; the extra bones just don't animate.
+    skipped rather than raising, so a malformed or hand-edited custom clip
+    can't crash a build; those entries just don't animate.
     """
     action = bpy.data.actions.new(clip_name)
     action.use_frame_range = True
@@ -62,16 +58,6 @@ def bake_pose_action(armature, clip_name: str, clip: dict[str, Any]):
             point.interpolation = "BEZIER"
     return action
 
-
-def _standard_bones(scale, shoulder, leg_x, arm_length, leg_length):
-    return {
-        "Hips": ((0, 0, .90 * scale), (0, 0, 1.15 * scale), None), "Chest": ((0, 0, 1.15 * scale), (0, 0, 1.95 * scale), "Hips"),
-        "Neck": ((0, 0, 1.95 * scale), (0, 0, 2.05 * scale), "Chest"), "Head": ((0, 0, 2.05 * scale), (0, 0, 2.56 * scale), "Neck"),
-        "UpperArm.L": ((-shoulder, 0, 1.92 * scale), (-shoulder, 0, 1.92 * scale - arm_length), "Chest"), "Forearm.L": ((-shoulder, 0, 1.92 * scale - arm_length), (-shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.L"), "Hand.L": ((-shoulder, 0, 1.92 * scale - arm_length * 2), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.L"),
-        "UpperArm.R": ((shoulder, 0, 1.92 * scale), (shoulder, 0, 1.92 * scale - arm_length), "Chest"), "Forearm.R": ((shoulder, 0, 1.92 * scale - arm_length), (shoulder, 0, 1.92 * scale - arm_length * 2), "UpperArm.R"), "Hand.R": ((shoulder, 0, 1.92 * scale - arm_length * 2), (shoulder, 0, 1.92 * scale - arm_length * 2 - .18 * scale), "Forearm.R"),
-        "UpperLeg.L": ((-leg_x, 0, .90 * scale), (-leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.L": ((-leg_x, 0, .90 * scale - leg_length), (-leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.L"), "Foot.L": ((-leg_x, 0, .90 * scale - leg_length * 2), (-leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.L"),
-        "UpperLeg.R": ((leg_x, 0, .90 * scale), (leg_x, 0, .90 * scale - leg_length), "Hips"), "LowerLeg.R": ((leg_x, 0, .90 * scale - leg_length), (leg_x, 0, .90 * scale - leg_length * 2), "UpperLeg.R"), "Foot.R": ((leg_x, 0, .90 * scale - leg_length * 2), (leg_x, .35 * scale, .90 * scale - leg_length * 2), "LowerLeg.R"),
-    }
 
 
 # Anatomical order outward (away from body) to inward (toward body):
@@ -164,13 +150,11 @@ def _face_parts(scale, head_scale_factor):
     return parts
 
 
-def _extended_bones(scale, shoulder, leg_x, arm_length, leg_length):
-    # Same overall silhouette as the standard rig (Hips at .90-1.15, torso
-    # top at 1.95, shoulders at 1.92, feet at .90-leg_length*2) — the torso
-    # is just subdivided into Spine/Chest/UpperChest instead of one bone,
-    # arms hang off a Shoulder bone instead of straight off the torso, and
-    # feet gain a Toe bone. Every standard bone name/position is preserved
-    # exactly, so standard-authored clips still bake correctly here.
+def _bones(scale, shoulder, leg_x, arm_length, leg_length):
+    # Hips at .90-1.15, torso (Spine/Chest/UpperChest) up to 1.95,
+    # shoulders at 1.92, feet at .90-leg_length*2, in the 2.69 m authoring
+    # space that build_character scales to target_height_m. Arms hang off a
+    # Shoulder bone; feet end in a Toe bone.
     bones = {
         "Hips": ((0, 0, .90 * scale), (0, 0, 1.15 * scale), None),
         "Spine": ((0, 0, 1.15 * scale), (0, 0, 1.35 * scale), "Hips"),
@@ -191,25 +175,12 @@ def _extended_bones(scale, shoulder, leg_x, arm_length, leg_length):
     return bones
 
 
-def _standard_parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head):
-    return [
-        ("Hips", (.55 * scale * body, .28 * scale, .25 * scale), (0, 0, 1.00 * scale), "bottom", "Hips"), ("Torso", (.60 * scale * body, .30 * scale, .80 * scale * torso), (0, 0, 1.55 * scale), "top", "Chest"),
-        ("Neck", (.18 * scale, .18 * scale, .15 * scale), (0, 0, 2.00 * scale), "skin", "Neck"), ("Head", (.42 * scale * head, .42 * scale * head, .42 * scale * head), (0, 0, 2.30 * scale), "skin", "Head"),
-        ("UpperArm.L", (.22 * scale, .22 * scale, arm_length), (-shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.L"), ("Forearm.L", (.20 * scale, .20 * scale, arm_length * .9375), (-shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.L"), ("Hand.L", (.22 * scale, .22 * scale, .18 * scale), (-shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.L"),
-        ("UpperArm.R", (.22 * scale, .22 * scale, arm_length), (shoulder, 0, 1.92 * scale - arm_length / 2), "top", "UpperArm.R"), ("Forearm.R", (.20 * scale, .20 * scale, arm_length * .9375), (shoulder, 0, 1.92 * scale - arm_length * 1.5), "skin", "Forearm.R"), ("Hand.R", (.22 * scale, .22 * scale, .18 * scale), (shoulder, 0, 1.92 * scale - arm_length * 2 - .09 * scale), "skin", "Hand.R"),
-        ("UpperLeg.L", (.23 * scale * body, .24 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.L"), ("LowerLeg.L", (.21 * scale * body, .22 * scale, leg_length), (-leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.L"), ("Foot.L", (.25 * scale * body, .45 * scale, .16 * scale), (-leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.L"),
-        ("UpperLeg.R", (.23 * scale * body, .24 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length / 2), "bottom", "UpperLeg.R"), ("LowerLeg.R", (.21 * scale * body, .22 * scale, leg_length), (leg_x, 0, .90 * scale - leg_length * 1.5), "bottom", "LowerLeg.R"), ("Foot.R", (.25 * scale * body, .45 * scale, .16 * scale), (leg_x, .175 * scale, .90 * scale - leg_length * 2), "shoes", "Foot.R"),
-    ]
 
-
-def _extended_parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head):
-    # Same Torso footprint (.60*body x .30 x .80*torso, spanning z 1.15-1.95)
-    # as the standard rig, just split into three stacked boxes matching the
-    # Spine/Chest/UpperChest bone ranges (heights .20/.30/.30, summing to
-    # the standard rig's .80) so subdividing the spine actually deforms the
-    # torso instead of leaving one rigid box. Arm/leg boxes are identical to
-    # the standard rig — they bind by bone name, which exists unchanged
-    # here, only the parent chain above them differs.
+def _parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head):
+    # Torso (.60*body x .30 x .80*torso, spanning z 1.15-1.95) is three
+    # stacked boxes matching the Spine/Chest/UpperChest bone ranges
+    # (heights .20/.30/.30) so bending the spine deforms the torso instead
+    # of moving one rigid box. Each part binds fully to one bone by name.
     parts = [
         ("Hips", (.55 * scale * body, .28 * scale, .25 * scale), (0, 0, 1.00 * scale), "bottom", "Hips"),
         ("Spine", (.58 * scale * body, .29 * scale, .20 * scale * torso), (0, 0, 1.25 * scale), "top", "Spine"),
@@ -244,22 +215,19 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
             bsdf.inputs["Roughness"].default_value = 0.72
         return result
 
-    extended = config.get("rig_type") == "extended"
     materials = {name: mat(f"{config['character_id']}_{name}", color) for name, color in config["materials"].items()}
-    if extended:
-        # Fixed face colours, not part of the user's configurable palette.
-        materials["eye_white"] = mat(f"{config['character_id']}_eye_white", _EYE_WHITE_COLOR)
-        materials["eye_dark"] = mat(f"{config['character_id']}_eye_dark", _EYE_DARK_COLOR)
-    # This is the legacy Player rig authored at 2.69m, preserved exactly as
-    # the default suite shape. Customisation is deliberately layered on it;
-    # it never reconstructs the rest pose from a different coordinate model.
+    # Fixed face colours, not part of the user's configurable palette.
+    materials["eye_white"] = mat(f"{config['character_id']}_eye_white", _EYE_WHITE_COLOR)
+    materials["eye_dark"] = mat(f"{config['character_id']}_eye_dark", _EYE_DARK_COLOR)
+    # The rig is authored in a 2.69 m-tall coordinate space and scaled to
+    # target_height_m; proportions are ratios layered on top of that.
     p = config["proportions"]
     scale = config["target_height_m"] / 2.69
     shoulder = .52 * scale * p["shoulder_width"]
     leg_x = .17 * scale * p["body_width"]
     arm_length = .48 * scale * p["arm_length"]
     leg_length = .50 * scale * p["leg_length"]
-    bones = (_extended_bones if extended else _standard_bones)(scale, shoulder, leg_x, arm_length, leg_length)
+    bones = _bones(scale, shoulder, leg_x, arm_length, leg_length)
 
     bpy.ops.object.armature_add(enter_editmode=True, location=(0, 0, 0))
     armature = bpy.context.object
@@ -278,7 +246,7 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     body = p["body_width"]
     torso = p["torso_length"]
     head = p["head_scale"]
-    parts = (_extended_parts if extended else _standard_parts)(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head)
+    parts = _parts(scale, shoulder, leg_x, arm_length, leg_length, body, torso, head)
     objects = []
     for part in parts:
         name, size, position, material_key, bone_name = part[:5]
@@ -304,25 +272,22 @@ def build_character(config: dict[str, Any]) -> tuple[Any, Any, dict[str, tuple]]
     bpy.ops.object.join()
     mesh = bpy.context.object; mesh.name = f"{config['character_id']}_Mesh"; mesh.parent = armature
 
-    if extended:
-        # Cylindrical limbs/digits plus a bevel and smooth shading on the
-        # whole mesh — softens the LEGO-block look without touching the
-        # standard rig's geometry at all. Added before the Armature
-        # modifier so it bevels the rest-pose mesh once; the Armature
-        # modifier then deforms that already-beveled result per frame,
-        # rather than re-bevelling posed (and possibly self-intersecting)
-        # geometry on every frame.
-        bpy.ops.object.shade_smooth()
-        bevel = mesh.modifiers.new(name="Bevel", type="BEVEL")
-        # PERCENT scales the bevel to each edge's own length, so one
-        # modifier rounds both the torso boxes and the tiny finger
-        # segments proportionally — a fixed absolute width sized for the
-        # torso would swallow a whole finger segment, and one sized for
-        # fingers would barely dent the torso.
-        bevel.offset_type = "PERCENT"
-        bevel.width = 25
-        bevel.segments = 3
-        bevel.limit_method = "ANGLE"
+    # Bevel and smooth shading on the whole mesh to soften the blocky look.
+    # Added before the Armature modifier so it bevels the rest-pose mesh
+    # once; the Armature modifier then deforms that already-bevelled result
+    # per frame, rather than re-bevelling posed (and possibly
+    # self-intersecting) geometry on every frame.
+    bpy.ops.object.shade_smooth()
+    bevel = mesh.modifiers.new(name="Bevel", type="BEVEL")
+    # PERCENT scales the bevel to each edge's own length, so one modifier
+    # rounds both the torso boxes and the tiny finger segments
+    # proportionally — a fixed absolute width sized for the torso would
+    # swallow a whole finger segment, and one sized for fingers would
+    # barely dent the torso.
+    bevel.offset_type = "PERCENT"
+    bevel.width = 25
+    bevel.segments = 3
+    bevel.limit_method = "ANGLE"
 
     modifier = mesh.modifiers.new(name="Armature", type="ARMATURE"); modifier.object = armature
 
@@ -336,7 +301,7 @@ def export_material_textures(config: dict[str, Any], output_dir) -> dict[str, st
     are backed by an actual texture asset, not just a flat material value —
     for Unity texture-based shaders, and so the colour is something an
     artist can open and paint over later. Every body part already maps to
-    one of these 4 materials (see _standard_parts/_extended_parts), so
+    one of these 4 materials (see _parts), so
     texturing the material automatically textures every part that uses
     it — this doesn't generate one file per body part name, since most of
     those would be pixel-identical duplicates of each other.

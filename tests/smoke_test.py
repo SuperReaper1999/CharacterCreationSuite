@@ -1,14 +1,14 @@
 """Headless smoke test for the Character Creation Suite.
 
-Builds every preset in presets/ plus an "every clip" build on both rig
-types, using the real export worker (blender_build.py) in a fresh Blender
+Builds every preset in presets/ plus an "every clip" build, using the
+real export worker (blender_build.py) in a fresh Blender
 process per build, exactly as the GUI's "Generate character" does. Then it
 inspects the outputs from inside Blender (tests/_blender_checks.py):
 
 - every file listed in manifest.json exists;
 - the .blend (primary output) has the armature, mesh, one fake-user
   Action per clip (rotation-only), the first clip assigned, packed textures;
-- bone counts (16 standard / 52 extended) in the combined and model FBX;
+- 52 bones in the .blend, the combined FBX, the model FBX and each clip FBX;
 - rotation-only contract: no moving location curves in any take;
 - one take per selected clip in the combined FBX, and per-clip FBX takes
   named after the clip with the same frame range as the combined take;
@@ -88,16 +88,15 @@ def main() -> int:
             path = temp_dir / "configs" / preset.name
             save_config(path, config)
             configs.append(path)
-        for rig_type in ("standard", "extended"):
-            config = load_config(ROOT / "presets" / "player.json")
-            config.update(character_id=f"AllClips_{rig_type}", rig_type=rig_type, clips=list(supported_clips()), output_root=str(temp_dir))
-            path = temp_dir / "configs" / f"all_clips_{rig_type}.json"
-            save_config(path, config)
-            configs.append(path)
+        config = load_config(ROOT / "presets" / "player.json")
+        config.update(character_id="AllClips", clips=list(supported_clips()), output_root=str(temp_dir))
+        path = temp_dir / "configs" / "all_clips.json"
+        save_config(path, config)
+        configs.append(path)
 
         for config_path in configs:
             config = load_config(config_path)
-            label = f"build {config_path.stem} ({config['rig_type']}, {len(config['clips'])} clips)"
+            label = f"build {config_path.stem} ({len(config['clips'])} clips)"
             result = run(runner(BUILD_SCRIPT, [str(config_path)]))
             if result.returncode != 0 or "CHARACTER_SUITE_SUCCESS" not in result.stdout:
                 failures.append(label)

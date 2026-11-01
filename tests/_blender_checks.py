@@ -22,8 +22,8 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from animation_library import _builtin_clips, _extended_clips  # noqa: E402
-from character_config import BONE_NAMES, ALL_BONE_NAMES, load_config  # noqa: E402
+from animation_library import builtin_clips  # noqa: E402
+from character_config import BONE_NAMES, load_config  # noqa: E402
 from rig_builder import action_fcurves, bake_pose_action, build_character  # noqa: E402
 
 FBX_TIME_PER_SECOND = 46186158000
@@ -94,7 +94,7 @@ def glb_summary(path: Path) -> dict:
 def check_outputs(config_path: Path, output_dir: Path) -> None:
     config = load_config(config_path)
     character = config["character_id"]
-    expected_bones = len(ALL_BONE_NAMES) if config["rig_type"] == "extended" else len(BONE_NAMES)
+    expected_bones = len(BONE_NAMES)
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
 
     listed = [manifest["blend"], manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(), *manifest["textures"].values()]
@@ -192,30 +192,27 @@ def elbow_flex_toward_front(pose_bones, side: str) -> float:
 
 
 def check_poses(config_path: Path) -> None:
-    builtin = _builtin_clips()
-    clips = {**builtin, **_extended_clips(builtin)}
-    for rig_type, suffix in (("standard", ""), ("extended", "Extended")):
-        reset()
-        config = load_config(config_path)
-        config["rig_type"] = rig_type
-        armature, mesh, _bones = build_character(config)
-        armature.animation_data_create()
-        for clip_name in (f"Idle{suffix}", f"Prone{suffix}", f"Crawl{suffix}"):
-            bake_pose_action(armature, clip_name, clips[clip_name])
-            bpy.context.scene.frame_set(1)
-            pose_bones = armature.pose.bones
-            chest = front_direction(pose_bones["Chest"])
-            head = front_direction(pose_bones["Head"])
-            if clip_name.startswith("Idle"):
-                check(f"{rig_type} {clip_name}: chest faces forward (+Y)", chest.y > 0.95, f"chest front {tuple(round(c, 2) for c in chest)}")
-                continue
-            check(f"{rig_type} {clip_name}: chest faces the ground", chest.z < -0.9, f"chest front {tuple(round(c, 2) for c in chest)}")
-            check(f"{rig_type} {clip_name}: head looks ahead, not up", head.z < 0 and head.y > 0.5, f"head front {tuple(round(c, 2) for c in head)}")
-            flex = min(elbow_flex_toward_front(pose_bones, "L"), elbow_flex_toward_front(pose_bones, "R"))
-            check(f"{rig_type} {clip_name}: elbows bend the natural way", flex > 0, f"flex {flex:.2f}")
-            evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
-            heights = [(mesh.matrix_world @ vertex.co).z for vertex in evaluated.vertices]
-            print(f"INFO {rig_type} {clip_name} frame 1 mesh height range: {min(heights):.2f}..{max(heights):.2f} m (target_height_m {config['target_height_m']})")
+    clips = builtin_clips()
+    reset()
+    config = load_config(config_path)
+    armature, mesh, _bones = build_character(config)
+    armature.animation_data_create()
+    for clip_name in ("Idle", "Prone", "Crawl"):
+        bake_pose_action(armature, clip_name, clips[clip_name])
+        bpy.context.scene.frame_set(1)
+        pose_bones = armature.pose.bones
+        chest = front_direction(pose_bones["Chest"])
+        head = front_direction(pose_bones["Head"])
+        if clip_name == "Idle":
+            check(f"{clip_name}: chest faces forward (+Y)", chest.y > 0.95, f"chest front {tuple(round(c, 2) for c in chest)}")
+            continue
+        check(f"{clip_name}: chest faces the ground", chest.z < -0.9, f"chest front {tuple(round(c, 2) for c in chest)}")
+        check(f"{clip_name}: head looks ahead, not up", head.z < 0 and head.y > 0.5, f"head front {tuple(round(c, 2) for c in head)}")
+        flex = min(elbow_flex_toward_front(pose_bones, "L"), elbow_flex_toward_front(pose_bones, "R"))
+        check(f"{clip_name}: elbows bend the natural way", flex > 0, f"flex {flex:.2f}")
+        evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
+        heights = [(mesh.matrix_world @ vertex.co).z for vertex in evaluated.vertices]
+        print(f"INFO {clip_name} frame 1 mesh height range: {min(heights):.2f}..{max(heights):.2f} m (target_height_m {config['target_height_m']})")
 
 
 if __name__ == "__main__":

@@ -69,7 +69,7 @@ def build(config_path: Path) -> None:
     preview_path = output_dir / f"{config['character_id']}_Preview.glb"
     if config["export_preview_glb"]:
         # export_apply=True so the GLB carries the same modifier-applied
-        # geometry as the FBX exports (the extended rig's Bevel modifier);
+        # geometry as the FBX exports (the Bevel modifier);
         # without it the GLB showed the un-bevelled mesh. The exporter keeps
         # the Armature modifier out of the apply and exports it as a skin.
         bpy.ops.export_scene.gltf(filepath=str(preview_path), export_format="GLB", use_selection=True, export_apply=True)
@@ -125,7 +125,7 @@ def build(config_path: Path) -> None:
             animation_paths[clip_name] = str(clip_path)
 
     # The .blend is the primary output: the rigged character as built
-    # (Bevel modifier still live on extended), its materials, and every
+    # (Bevel modifier still live), its materials, and every
     # selected clip as a named Action. Saved last so it reflects the final
     # scene state after all exports.
     blend_path = output_dir / f"{config['character_id']}.blend"

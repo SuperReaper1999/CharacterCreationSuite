@@ -1,11 +1,16 @@
-"""Fixed-topology, rotation-only animation definitions for the suite."""
+"""Fixed-topology, rotation-only animation definitions for the suite.
+
+Clips are authored on the main body bones (Hips, Chest, Neck, Head, arms,
+legs, feet) in _authored_clips(). builtin_clips() then fills in the rest of
+the 52-bone rig (Spine/UpperChest, Shoulders, Toes, fingers) from those
+values with _expand_pose(), so the extra joints follow the authored motion
+instead of being keyed by hand in 12 places.
+"""
 
 from __future__ import annotations
 
 import math
 from typing import Any
-
-from character_config import EXTENDED_CLIP_SUFFIX
 
 
 def r(x: float, y: float = 0.0, z: float = 0.0) -> tuple[float, float, float]:
@@ -20,18 +25,28 @@ _THUMB_CURL = (r(8), r(14), r(10))
 
 
 def clips() -> dict[str, dict[str, Any]]:
-    """Built-in clips (each with an Extended-suffixed sibling for rig_type
-    "extended"), overlaid with any user-saved preset animations from
+    """Built-in clips, overlaid with any user-saved preset animations from
     presets/animations/ (see custom_clips.py) so a preset with the same
     name deliberately replaces a built-in."""
     from custom_clips import list_custom_clips
-    builtin = _builtin_clips()
-    return {**builtin, **_extended_clips(builtin), **list_custom_clips()}
+    return {**builtin_clips(), **list_custom_clips()}
 
 
-def _extend_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple[float, float, float]]:
-    """Redistribute a standard-rig pose onto the extended rig's extra
-    joints, without changing any of the original bones' values.
+def builtin_clips() -> dict[str, dict[str, Any]]:
+    """The built-in clips, expanded onto every bone of the rig."""
+    return {
+        name: {
+            "frames": clip["frames"],
+            "loop": clip["loop"],
+            "poses": {frame: _expand_pose(pose) for frame, pose in clip["poses"].items()},
+        }
+        for name, clip in _authored_clips().items()
+    }
+
+
+def _expand_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple[float, float, float]]:
+    """Fill in the rig's secondary joints from an authored main-body pose,
+    without changing any authored bone's other values.
 
     Chest's rotation is split across Spine/Chest/UpperChest (fractions
     0.35/0.35/0.30, summing to 1) so a torso lean or twist reads as a
@@ -45,42 +60,31 @@ def _extend_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple
     a static baseline rather than something reactive per pose, since nothing
     upstream signals "gripping" vs "open hand" reliably enough to vary it.
     """
-    extended = dict(pose)
+    expanded = dict(pose)
     if "Chest" in pose:
         x, y, z = pose["Chest"]
-        extended["Spine"] = (x * 0.35, y * 0.35, z * 0.35)
-        extended["Chest"] = (x * 0.35, y * 0.35, z * 0.35)
-        extended["UpperChest"] = (x * 0.30, y * 0.30, z * 0.30)
+        expanded["Spine"] = (x * 0.35, y * 0.35, z * 0.35)
+        expanded["Chest"] = (x * 0.35, y * 0.35, z * 0.35)
+        expanded["UpperChest"] = (x * 0.30, y * 0.30, z * 0.30)
     for side in ("L", "R"):
         upper_arm = pose.get(f"UpperArm.{side}")
         if upper_arm:
-            extended[f"Shoulder.{side}"] = tuple(component * 0.15 for component in upper_arm)
+            expanded[f"Shoulder.{side}"] = tuple(component * 0.15 for component in upper_arm)
         foot = pose.get(f"Foot.{side}")
         lower_leg = pose.get(f"LowerLeg.{side}")
         if foot:
-            extended[f"Toe.{side}"] = tuple(component * 0.4 for component in foot)
+            expanded[f"Toe.{side}"] = tuple(component * 0.4 for component in foot)
         elif lower_leg:
-            extended[f"Toe.{side}"] = tuple(component * 0.15 for component in lower_leg)
+            expanded[f"Toe.{side}"] = tuple(component * 0.15 for component in lower_leg)
         for finger in ("Index", "Middle", "Ring", "Little"):
             for segment, curl in enumerate(_FINGER_CURL, start=1):
-                extended[f"{finger}{segment}.{side}"] = curl
+                expanded[f"{finger}{segment}.{side}"] = curl
         for segment, curl in enumerate(_THUMB_CURL, start=1):
-            extended[f"Thumb{segment}.{side}"] = curl
-    return extended
+            expanded[f"Thumb{segment}.{side}"] = curl
+    return expanded
 
 
-def _extended_clips(builtin: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
-    return {
-        f"{name}{EXTENDED_CLIP_SUFFIX}": {
-            "frames": clip["frames"],
-            "loop": clip["loop"],
-            "poses": {frame: _extend_pose(pose) for frame, pose in clip["poses"].items()},
-        }
-        for name, clip in builtin.items()
-    }
-
-
-def _builtin_clips() -> dict[str, dict[str, Any]]:
+def _authored_clips() -> dict[str, dict[str, Any]]:
     run = {}
     for frame, phase in ((1, 1), (9, 0), (16, -1), (24, 0), (31, 1)):
         pose = {"Chest": r(6)}
@@ -128,8 +132,8 @@ def _builtin_clips() -> dict[str, dict[str, Any]]:
         "Idle": {"frames": 60, "loop": True, "poses": {1: {}, 30: {"Chest": r(1), "Head": r(-1)}, 60: {}}},
         "Run": {"frames": 31, "loop": True, "poses": run},
         "Jump": {"frames": 46, "loop": False, "poses": {1: {}, 9: {"UpperLeg.L": r(-25), "UpperLeg.R": r(-25), "LowerLeg.L": r(35), "LowerLeg.R": r(35), "UpperArm.L": r(-25), "UpperArm.R": r(-25)}, 19: {"UpperLeg.L": r(12), "UpperLeg.R": r(12), "LowerLeg.L": r(-10), "LowerLeg.R": r(-10), "UpperArm.L": r(65), "UpperArm.R": r(65)}, 33: {"UpperLeg.L": r(8), "UpperLeg.R": r(8), "UpperArm.L": r(25), "UpperArm.R": r(25)}, 46: {}}},
-        # A deliberate two-handed heavy strike for the sledgehammer. The
-        # support arm stays involved, so Unity must retain LeftGripPoint IK.
+        # A deliberate two-handed overhead heavy strike; both arms stay
+        # involved throughout.
         "MeleeAttack": {"frames": 30, "loop": False, "poses": {
             1: {},
             8: {"Chest": r(-8, -18), "UpperArm.L": r(-72, 8, 16), "Forearm.L": r(-48, 0, -8), "UpperArm.R": r(-78, -10, -16), "Forearm.R": r(-52, 0, 8)},
@@ -137,8 +141,8 @@ def _builtin_clips() -> dict[str, dict[str, Any]]:
             22: {"Chest": r(6, 5), "UpperArm.L": r(22, 0, 4), "Forearm.L": r(12), "UpperArm.R": r(26, 0, -4), "Forearm.R": r(12)},
             30: {},
         }},
-        # A controlled two-handed stroke for pickaxes, axes, and shovels.
-        # Contact is frame 16 (0.5 seconds at 30fps).
+        # A controlled two-handed downward tool stroke. Contact is frame 16
+        # (0.5 seconds at 30fps).
         "HarvestSwing": {"frames": 32, "loop": False, "poses": {
             1: {},
             9: {"Chest": r(-6, -14), "UpperArm.L": r(-58, 12, 20), "Forearm.L": r(-44, 0, -12), "UpperArm.R": r(-72, -12, -18), "Forearm.R": r(-54, 0, 10)},
