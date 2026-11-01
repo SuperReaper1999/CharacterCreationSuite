@@ -2,7 +2,7 @@
 
 A Blender character generator: it builds a rigged, animated low-poly humanoid from a JSON preset and saves it as a `.blend`. FBX and GLB exports are written alongside for use in other apps.
 
-Double-click `Run Character Creation Suite.bat` (or run `python character_suite.py`; Blender 5.0 must be on PATH or in its default install folder), load a preset from `presets/` (`player`, `zombie`, `reeves`, `summer`), customise it, then select **Generate character**.
+Double-click `Run Character Creation Suite.bat` (or run `python character_suite.py`; Blender 5.0 must be on PATH or in its default install folder), load a preset from `presets/` (`player` or `zombie`), customise it, then select **Generate character**.
 
 The Character tab includes a fast live silhouette preview for proportions and
 palette changes. The Materials tab has native colour pickers and swatches; the
