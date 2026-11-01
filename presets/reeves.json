@@ -1,7 +1,6 @@
 {
   "character_id": "Reeves",
   "display_name": "Reeves",
-  "archetype": "npc",
   "rig_type": "extended",
   "target_height_m": 1.84,
   "proportions": { "shoulder_width": 1.16, "torso_length": 1.08, "arm_length": 1.06, "leg_length": 1.02, "head_scale": 1.02, "body_width": 1.14 },

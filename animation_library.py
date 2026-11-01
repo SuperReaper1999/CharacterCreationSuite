@@ -114,11 +114,12 @@ def _builtin_clips() -> dict[str, dict[str, Any]]:
     # subtle drag). Y/Z rotations on the arms/legs stayed controlled under
     # the same parent pitch, so the stride swing is authored on those axes
     # instead, purely by rendering candidates and keeping what didn't break.
+    # Body pitch, head lift, and elbow bend match Prone below (face-down).
     crawl = {}
     for frame, phase in ((1, 1), (9, 0), (16, -1), (24, 0), (31, 1)):
         crawl[frame] = {
-            "Hips": r(80), "Head": r(-25),
-            "Forearm.L": r(-15), "Forearm.R": r(-15),
+            "Hips": r(-80), "Head": r(55),
+            "Forearm.L": r(15), "Forearm.R": r(15),
             "UpperArm.L": r(0, 22 * phase), "UpperArm.R": r(0, -22 * phase),
             "UpperLeg.L": r(0, 0, 18 * -phase), "UpperLeg.R": r(0, 0, 18 * phase),
         }
@@ -165,10 +166,18 @@ def _builtin_clips() -> dict[str, dict[str, Any]]:
         # the hip bone's rest height rather than lying flat on the ground —
         # see README "Design boundaries" for what the Unity side must do
         # about that before this is usable as an actual prone stance.
+        #
+        # Sign conventions (checked numerically and by rendering — see
+        # tests/smoke_test.py, which asserts the facing direction):
+        # Hips -80 on X tips the body forward so the chest faces the
+        # ground (+80 tips it backwards onto its back, which an earlier
+        # release shipped by mistake). Head +55 lifts the face to look
+        # ahead, ~25 degrees below horizontal. Forearm +15 bends the elbow
+        # the natural way (same sign as Crouch/Sit); -15 hyperextends it.
         "Prone": {"frames": 30, "loop": True, "poses": {
-            1: {"Hips": r(80), "Forearm.L": r(-15), "Forearm.R": r(-15), "Head": r(-25)},
-            15: {"Hips": r(80), "Forearm.L": r(-15), "Forearm.R": r(-15), "Head": r(-24)},
-            30: {"Hips": r(80), "Forearm.L": r(-15), "Forearm.R": r(-15), "Head": r(-25)},
+            1: {"Hips": r(-80), "Forearm.L": r(15), "Forearm.R": r(15), "Head": r(55)},
+            15: {"Hips": r(-80), "Forearm.L": r(15), "Forearm.R": r(15), "Head": r(54)},
+            30: {"Hips": r(-80), "Forearm.L": r(15), "Forearm.R": r(15), "Head": r(55)},
         }},
         "ZombieAttack": {"frames": 30, "loop": False, "poses": {1: {"Chest": r(10)}, 8: {"Chest": r(-18), "UpperArm.L": r(-55), "UpperArm.R": r(-55), "Forearm.L": r(-35), "Forearm.R": r(-35)}, 15: {"Chest": r(28), "UpperArm.L": r(70), "UpperArm.R": r(70), "Forearm.L": r(20), "Forearm.R": r(20)}, 23: {"Chest": r(8), "UpperArm.L": r(18), "UpperArm.R": r(18)}, 30: {"Chest": r(10)}}},
     }

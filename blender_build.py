@@ -37,7 +37,11 @@ def build(config_path: Path) -> None:
     select_exportables()
     preview_path = output_dir / f"{config['character_id']}_Preview.glb"
     if config["export_preview_glb"]:
-        bpy.ops.export_scene.gltf(filepath=str(preview_path), export_format="GLB", use_selection=True)
+        # export_apply=True so the GLB carries the same modifier-applied
+        # geometry as the FBX exports (the extended rig's Bevel modifier);
+        # without it the GLB showed the un-bevelled mesh. The exporter keeps
+        # the Armature modifier out of the apply and exports it as a skin.
+        bpy.ops.export_scene.gltf(filepath=str(preview_path), export_format="GLB", use_selection=True, export_apply=True)
 
     # Bind-pose model FBX, no animation. Exported before any actions exist so
     # Unity has a clean model import that isn't coupled to the combined-take
@@ -65,21 +69,28 @@ def build(config_path: Path) -> None:
     # action each. Exported from the same armature object as the model FBX
     # above, so the bone hierarchy matches exactly and Unity can retarget
     # each clip onto the model's avatar.
+    #
+    # Each clip is exported through a single temporary NLA strip named after
+    # the clip (bake_anim_use_nla_strips=True). The FBX exporter names that
+    # take after the strip and starts its keys at time 0 — the same timing
+    # as the combined FBX's takes. The previous approach (exporting the
+    # active action over the scene range) named every take "Scene" and
+    # started its keys at frame 1 instead of 0.
     animation_paths: dict[str, str] = {}
     if config["export_separate_animations"]:
         animations_dir = output_dir / "Animations"
         animations_dir.mkdir(parents=True, exist_ok=True)
+        armature.animation_data.action = None
         for clip_name in config["clips"]:
             action = bpy.data.actions[clip_name]
-            armature.animation_data.action = action
-            # bake_anim_use_all_actions=False bakes over the scene frame
-            # range, not the action's own frame_start/frame_end, so it must
-            # be set per clip or every clip exports at the default 1-250.
-            bpy.context.scene.frame_start = int(action.frame_start)
-            bpy.context.scene.frame_end = int(action.frame_end)
+            track = armature.animation_data.nla_tracks.new()
+            track.name = clip_name
+            strip = track.strips.new(clip_name, int(action.frame_start), action)
+            strip.name = clip_name
             bpy.ops.object.select_all(action="DESELECT"); armature.select_set(True); bpy.context.view_layer.objects.active = armature
             clip_path = animations_dir / f"{clip_name}.fbx"
-            bpy.ops.export_scene.fbx(filepath=str(clip_path), use_selection=True, object_types={"ARMATURE"}, axis_forward="-Z", axis_up="Y", add_leaf_bones=False, bake_anim=True, bake_anim_use_all_actions=False, bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True, bake_anim_step=1.0, bake_anim_simplify_factor=0.0)
+            bpy.ops.export_scene.fbx(filepath=str(clip_path), use_selection=True, object_types={"ARMATURE"}, axis_forward="-Z", axis_up="Y", add_leaf_bones=False, bake_anim=True, bake_anim_use_all_actions=False, bake_anim_use_nla_strips=True, bake_anim_force_startend_keying=True, bake_anim_step=1.0, bake_anim_simplify_factor=0.0)
+            armature.animation_data.nla_tracks.remove(track)
             animation_paths[clip_name] = str(clip_path)
 
     manifest = {"character_id": config["character_id"], "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0, "unity_axes": {"forward": "-Z", "up": "Y"}}

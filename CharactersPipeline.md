@@ -9,9 +9,9 @@ load a preset from `presets/`, then generate a Unity-ready FBX into
 `build/<character-id>/`.
 
 The suite deliberately preserves the old pipeline's hard constraints: fixed
-humanoid topology (16-bone "standard", or the newer 22-bone "extended" rig
-with Spine/UpperChest/Shoulder/Toe added — both configurable per character,
-never mixed at build time), metres, Blender Z-up authoring, Unity FBX axis
+humanoid topology (16-bone "standard", or the newer 52-bone "extended" rig
+with Spine/UpperChest/Shoulder/Toe and 3-segment fingers added — both
+configurable per character, never mixed at build time), metres, Blender Z-up authoring, Unity FBX axis
 conversion, rotation-only clips, no Animation Events, and no leaf bones.
 Generated build folders are disposable; the JSON preset is the editable source
 of truth. The old scripts below remain as legacy references until the new FBX
@@ -58,8 +58,11 @@ the project.
   UpperLeg.L/R→Left/Right Hips, LowerLeg.L/R→Left/Right Knee.
 
 ## Still open
-- Player has no Attack clip (only zombie does).
+- ~~Player has no Attack clip (only zombie does).~~ Applies only to the legacy
+  scripts; the suite's player preset has `MeleeAttack` and `HarvestSwing`.
 - Push-force ragdolls need `Health.TakeDamage` extended to carry a hit
   direction.
-- The "random icosphere" reported once, never reproduced or explained —
-  watch for it.
+- The "random icosphere" reported once. Likely explanation (not confirmed
+  against the original report): Blender's glTF importer adds an `Icosphere`
+  object (its display shape for bones) when you import a `_Preview.glb`. The
+  exported GLB itself contains only the character mesh.

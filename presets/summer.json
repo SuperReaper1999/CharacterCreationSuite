@@ -1,7 +1,6 @@
 {
   "character_id": "Summer",
   "display_name": "Summer",
-  "archetype": "npc",
   "rig_type": "extended",
   "target_height_m": 1.68,
   "proportions": { "shoulder_width": 0.84, "torso_length": 0.96, "arm_length": 0.94, "leg_length": 0.98, "head_scale": 0.95, "body_width": 0.84 },

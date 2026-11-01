@@ -40,7 +40,6 @@ def default_config() -> dict[str, Any]:
         "version": CONFIG_VERSION,
         "character_id": "NewCharacter",
         "display_name": "New Character",
-        "archetype": "humanoid",
         "rig_type": "standard",
         "target_height_m": 1.75,
         "proportions": {"shoulder_width": 1.0, "torso_length": 1.0, "arm_length": 1.0, "leg_length": 1.0, "head_scale": 1.0, "body_width": 1.0},
@@ -72,7 +71,9 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     config.update({key: value for key, value in raw.items() if key not in ("proportions", "materials", "clips")})
     config["character_id"] = safe_id(config["character_id"])
     config["display_name"] = str(config["display_name"]).strip() or config["character_id"]
-    config["archetype"] = str(config["archetype"]).lower()
+    # "archetype" was a label nothing read; it was removed. Drop it from
+    # older configs so it isn't carried forward when they are re-saved.
+    config.pop("archetype", None)
     rig_type = str(config.get("rig_type", "standard")).lower()
     config["rig_type"] = rig_type if rig_type in RIG_TYPES else "standard"
     config["target_height_m"] = _number(config["target_height_m"], 0.8, 2.8, 1.75)

@@ -14,8 +14,8 @@ The suite writes all generated output to `build/<character-id>/`:
 
 - `<character-id>.fbx` — Unity import asset with selected animation Takes baked in (unchanged legacy artifact).
 - `<character-id>_Model.fbx` — the same mesh and rig with no animation, for pipelines that import the model and clips as separate Unity assets.
-- `Animations/<clip-name>.fbx` — one skeleton-only FBX per selected clip, no mesh. Each shares the exact bone names and hierarchy of `<character-id>_Model.fbx`, so Unity's "copy from other Avatar" retargeting maps cleanly onto the model.
-- `<character-id>_Preview.glb` — bind-pose preview, not the Unity animation asset.
+- `Animations/<clip-name>.fbx` — one skeleton-only FBX per selected clip, no mesh. Each shares the exact bone names and hierarchy of `<character-id>_Model.fbx`, so Unity's "copy from other Avatar" retargeting maps cleanly onto the model. Each file's single take is named after the clip (e.g. `Run`) and starts at frame 0, the same timing as the matching take in `<character-id>.fbx`. (Earlier builds named every per-clip take `Scene` and started it at frame 1.)
+- `<character-id>_Preview.glb` — bind-pose preview, not the Unity animation asset. It is exported with modifiers applied, so on `extended` builds it includes the same bevelled geometry as the FBX. (Earlier builds exported the un-bevelled mesh here.)
 - `Textures/<character-id>_<material>.png` — one small solid-colour texture per material (`skin`/`top`/`bottom`/`shoes`), wired into that material's Base Color. `<character-id>.fbx` and `<character-id>_Model.fbx` embed these directly (`embed_textures=True`) as well as referencing the standalone files, so the FBX alone is enough for Unity to show the right colours even before the `Textures/` folder is imported alongside it.
 - `character_config.json` — reproducible build configuration.
 - `manifest.json` — generated asset contract and validation metadata, including `model_fbx`, `animation_fbx`, and `textures` paths.
@@ -26,7 +26,7 @@ The player preset includes two distinct two-handed tool clips: `MeleeAttack` for
 
 `Crouch`, `CrouchWalkRifle`, `Prone`, and `Crawl` are available as selectable clips in the Animations tab (off by default, same as `ZombieAttack` — check the box to include them in a build). `CrouchWalkRifle` is a looping crouched stride with both arms locked into a two-handed rifle-ready pose (the arms don't swing with the gait, since a held weapon shouldn't). `Crouch`'s knee bend was fixed after an initial release had the sign backwards, which folded the knee the wrong way and left the feet dangling at a broken-looking angle instead of flat on the ground — the fix (and every stride clip added alongside it) was validated by rendering the pose in headless Blender before shipping it, not just by eyeballing the numbers.
 
-`Prone` pitches the whole rig ~horizontal around the hip bone's rest height rather than lying flat on the ground: because clips are rotation-only (see below), the pose cannot carry the downward offset needed to put the body at ground level. For a 1.75 m-tall character the hip pivot sits at `target_height_m * (0.90 / 2.69)` ≈ 0.59 m, so the posed body floats roughly between 0.40 m and 1.00 m off the ground until the Unity side lowers the character's root transform (and collider height) by that offset while the Prone state is active — the same way Unity, not the clip, already owns all root positioning here. `Crawl` is a stride cycle on top of that same pitched pose; its arm/leg swing is authored on different rotation axes than every other clip in this file (Y/Z instead of X) because composing an X-axis stride swing onto Hips' already-80-degree X pitch doesn't add cleanly — it flings the limb, confirmed by rendering it before ruling it out.
+`Prone` tips the whole rig forward ~80° around the hip bone's rest height so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent), rather than lying flat on the ground: because clips are rotation-only (see below), the pose cannot carry the downward offset needed to put the body at ground level. For a 1.75 m-tall character the hip pivot sits at `target_height_m * (0.90 / 2.69)` ≈ 0.59 m, so the posed mesh spans roughly 0.21–1.04 m above the ground on `standard` (0.12–1.01 m on `extended`, whose toes reach lower) until the Unity side lowers the character's root transform (and collider height) by that offset while the Prone state is active — the same way Unity, not the clip, already owns all root positioning here. These ranges are measured by `tests/smoke_test.py` (it prints them as `INFO` lines). An earlier release had the pitch sign backwards, which laid the character face-up with hyperextended elbows; the test now asserts the facing direction and elbow bend. `Crawl` is a stride cycle on top of that same face-down pose; its arm/leg swing is authored on different rotation axes than every other clip in this file (Y/Z instead of X) because composing an X-axis stride swing onto Hips' already-80-degree X pitch doesn't add cleanly — it flings the limb, confirmed by rendering it before ruling it out.
 
 ### Rig types
 
@@ -39,6 +39,25 @@ Fingers get a fixed relaxed-hand curl in every frame of every `Extended` clip (h
 The head also gets a simple face: two eyes (white sphere + smaller dark pupil sphere), a nose (a small forward-pointing cone — the only rotated primitive in the rig; every other shape is built axis-aligned and this one gets rotated -90° about X after creation so its point aims along +Y instead of +Z), and a mouth (a thin dark box). All of it is geometry, not a texture — there's no UV-mapped decal here. Eyes/pupils/mouth use two fixed materials (`eye_white`, `eye_dark`) that exist only on `extended` builds and aren't part of `config["materials"]` — an eye colour isn't a clothing choice the way skin/top/bottom/shoes are, so it doesn't go through the same configurable palette, and isn't included in the per-material texture export either. All five face parts are bound directly to the `Head` bone; there was no need for separate bones since none of them move independently of the head.
 
 Every built-in clip has an `Extended`-suffixed sibling (`IdleExtended`, `RunExtended`, …) generated from the original by `animation_library._extend_pose`, not hand-authored separately — hand-authoring 12 parallel clips would drift from the originals the first time one got tuned. The transform: a clip's `Chest` rotation is split 0.35/0.35/0.30 across `Spine`/`Chest`/`UpperChest` (the fractions sum to 1, so the total bend at the top of the spine matches the original exactly, just arrives as a curve instead of one hinge); `Shoulder.L`/`R` gets 15% of whichever axis `UpperArm.L`/`R` uses, and `Toe.L`/`R` gets 40% of `Foot`'s rotation (or 15% of `LowerLeg`'s, for clips that don't key `Foot`) as a following motion. Original bones are never altered by this. Validated by rendering `CrouchExtended`, `MeleeAttackExtended`, `ProneExtended`, and `CrawlExtended` in headless Blender — the last two mattered most, since that's where a naive addition would have hit the same X-axis-under-heavy-pitch problem `Crawl` itself did; the transform stayed on the already-safe axes and rendered clean.
+
+## Testing
+
+`tests/smoke_test.py` is a headless end-to-end check. It builds every preset in `presets/` plus an "every clip" character on both rig types, each through the real `blender_build.py` in a fresh Blender process (the same path as **Generate Unity FBX**), then inspects the outputs from inside Blender:
+
+- every file listed in `manifest.json` exists;
+- bone counts are right (16 `standard`, 52 `extended`) in the combined and model FBX;
+- no take has moving location keys (the rotation-only contract);
+- the combined FBX has one take per clip, and each per-clip FBX has one take named after its clip with the same frame range;
+- the GLB is skinned and carries the modifier-applied geometry;
+- `Prone`/`Crawl` (and their `Extended` versions) face the ground with naturally bent elbows, and `Idle` faces forward.
+
+```
+python tests/smoke_test.py                                  # finds blender on PATH or the default install paths
+python tests/smoke_test.py --blender "C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"
+python tests/smoke_test.py --bpy-python <python with "pip install bpy">
+```
+
+It writes only to a temporary folder (pass `--keep` to keep it) and exits non-zero if any check fails. It needs no Unity and no tkinter. It does not test the GUI, the interactive Blender preview/editor, or how Unity imports the files.
 
 ## Design boundaries
 
