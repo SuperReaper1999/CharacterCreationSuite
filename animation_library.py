@@ -164,7 +164,7 @@ def _builtin_clips() -> dict[str, dict[str, Any]]:
         # Held prone: Hips pitches the whole rig ~horizontal, head counter-
         # rotated up to look forward. Rotation-only, so this pivots around
         # the hip bone's rest height rather than lying flat on the ground —
-        # see README "Design boundaries" for what the Unity side must do
+        # see README "Design boundaries" for what whatever plays it must do
         # about that before this is usable as an actual prone stance.
         #
         # Sign conventions (checked numerically and by rendering — see

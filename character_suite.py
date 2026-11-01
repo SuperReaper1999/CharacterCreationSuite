@@ -1,4 +1,4 @@
-"""Windows desktop UI for building configurable Unity characters."""
+"""Desktop UI for building configurable rigged characters in Blender."""
 
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ class CharacterSuite:
         ttk.Button(toolbar, text="Load preset", command=self.load_preset).pack(side="left", padx=4)
         ttk.Button(toolbar, text="Open config", command=self.open_config).pack(side="left", padx=4)
         ttk.Button(toolbar, text="Save config", command=self.save_config).pack(side="left", padx=4)
-        ttk.Button(toolbar, text="Generate Unity FBX", command=self.generate).pack(side="right")
+        ttk.Button(toolbar, text="Generate character", command=self.generate).pack(side="right")
         tabs = ttk.Notebook(self.root); tabs.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 8))
         identity = ttk.Frame(tabs, padding=12); proportions = ttk.Frame(tabs, padding=12); materials = ttk.Frame(tabs, padding=12); animations = ttk.Frame(tabs, padding=12); output = ttk.Frame(tabs, padding=12)
         tabs.add(identity, text="Character"); tabs.add(proportions, text="Proportions"); tabs.add(materials, text="Materials"); tabs.add(animations, text="Animations"); tabs.add(output, text="Build")
@@ -57,16 +57,16 @@ class CharacterSuite:
         for row, (key, label) in enumerate((("shoulder_width", "Shoulder width"), ("torso_length", "Torso length"), ("arm_length", "Arm length"), ("leg_length", "Leg length"), ("head_scale", "Head size"), ("body_width", "Body width"))):
             ttk.Label(proportions, text=label).grid(row=row, column=0, sticky="w", pady=4); value = tk.StringVar(); self.proportions[key] = value; ttk.Scale(proportions, from_=.55, to=1.8, orient="horizontal", variable=value).grid(row=row, column=1, sticky="ew", padx=(0, 8)); ttk.Entry(proportions, textvariable=value, width=8).grid(row=row, column=2, sticky="w")
         proportions.columnconfigure(1, weight=1)
-        ttk.Label(proportions, text="All dimensions are ratios. Blender stays Z-up internally; the worker handles the Unity axis conversion on export.", wraplength=650).grid(row=7, column=0, columnspan=3, sticky="w", pady=(18, 0))
+        ttk.Label(proportions, text="All dimensions are ratios. The .blend stays Blender-native (Z-up); only the FBX export converts axes (-Z forward, Y up) for other apps.", wraplength=650).grid(row=7, column=0, columnspan=3, sticky="w", pady=(18, 0))
         for row, label in enumerate(("skin", "top", "bottom", "shoes")):
             ttk.Label(materials, text=label.title()).grid(row=row, column=0, sticky="w", pady=5)
             values = [tk.StringVar() for _ in range(4)]; self.colors[label] = values
             for index, value in enumerate(values): ttk.Entry(materials, textvariable=value, width=7).grid(row=row, column=index + 1, padx=3)
             ttk.Button(materials, text="Pick colour", command=lambda name=label: self.pick_colour(name)).grid(row=row, column=5, padx=(9, 4))
             swatch = tk.Label(materials, width=5, relief=tk.SUNKEN); swatch.grid(row=row, column=6, padx=3); self.color_swatches[label] = swatch
-        ttk.Label(materials, text="RGBA channels use 0–1 values. Each build also writes one small solid-colour PNG per material to build/<character-id>/Textures/ and embeds it in the FBX.", wraplength=650).grid(row=6, column=0, columnspan=5, sticky="w", pady=(18, 0))
+        ttk.Label(materials, text="RGBA channels use 0–1 values. Each build also writes one small solid-colour PNG per material to build/<character-id>/Textures/ and packs it into the .blend (and embeds it in the FBX).", wraplength=650).grid(row=6, column=0, columnspan=5, sticky="w", pady=(18, 0))
         header = ttk.Frame(animations); header.pack(fill="x", pady=(0, 12))
-        ttk.Label(header, text="Select rotation-only clips to bake as FBX Takes. Root translation and Animation Events are deliberately unavailable.", wraplength=560).pack(side="left")
+        ttk.Label(header, text="Select rotation-only clips to bake as Blender Actions (also exported as FBX takes). Root translation and Animation Events are deliberately unavailable.", wraplength=560).pack(side="left")
         ttk.Button(header, text="Refresh clip list", command=self.refresh_clips).pack(side="right")
         ttk.Label(animations, text="Edit a clip's pose in the Blender preview, then save it there as a preset — it shows up here after Refresh.", wraplength=680, foreground="#5a6b8c").pack(anchor="w", pady=(0, 10))
         self.clip_rows_frame = ttk.Frame(animations); self.clip_rows_frame.pack(fill="both", expand=True)
@@ -196,8 +196,8 @@ class CharacterSuite:
         self._write_log(result.stdout + result.stderr + "\n")
         manifest_path = config_path.parent / "manifest.json"
         if result.returncode == 0 and manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8")); self.status.set(f"Built {Path(manifest['fbx']).name} with {len(manifest['clips'])} clips")
-            messagebox.showinfo("Character Creation Suite", f"Generated Unity FBX:\n{manifest['fbx']}\n\nClips: {', '.join(manifest['clips'])}")
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8")); self.status.set(f"Built {Path(manifest['blend']).name} with {len(manifest['clips'])} clips")
+            messagebox.showinfo("Character Creation Suite", f"Generated Blender file:\n{manifest['blend']}\n\nFBX: {manifest['fbx']}\n\nClips: {', '.join(manifest['clips'])}")
         else: self.status.set("Build failed — see Build tab log"); messagebox.showerror("Character Creation Suite", "Blender did not complete the build. See the Build tab log.")
 
 

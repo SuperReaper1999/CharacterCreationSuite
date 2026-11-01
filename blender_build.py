@@ -1,4 +1,5 @@
-"""Headless Blender worker for Character Creation Suite.
+"""Headless Blender worker for Character Creation Suite: builds the character
+and writes <id>.blend (primary output) plus FBX/GLB exports.
 
 Run only through Blender: blender --background --python blender_build.py -- config.json
 """
@@ -22,6 +23,36 @@ from rig_builder import action_fcurves, bake_pose_action, build_character, expor
 
 def after_double_dash() -> list[str]:
     return sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+
+
+def save_blend(blend_path: Path, armature, clip_names: list[str]) -> None:
+    """Save the current scene as a self-contained .blend.
+
+    - Every clip Action gets a fake user, so all of them survive the save
+      even though only one can be assigned to the armature at a time; pick
+      any of them in Blender's Action Editor.
+    - The first selected clip is left assigned, with the scene frame range
+      set to it, so the file opens ready to play.
+    - Material textures are packed into the file (like the FBX's embedded
+      textures), so the .blend still shows the right colours if it's moved
+      away from its Textures/ folder.
+    """
+    for clip_name in clip_names:
+        bpy.data.actions[clip_name].use_fake_user = True
+    first = bpy.data.actions[clip_names[0]]
+    armature.animation_data.action = first
+    scene = bpy.context.scene
+    scene.frame_start = int(first.frame_start)
+    scene.frame_end = int(first.frame_end)
+    scene.frame_set(scene.frame_start)
+    for image in bpy.data.images:
+        if image.filepath_raw and not image.packed_file:
+            image.pack()
+    # Drop leftovers from Blender's startup scene (e.g. the default cube's
+    # mesh and "Material") that build_character's object delete orphaned.
+    # Fake-user Actions and everything the character uses are kept.
+    bpy.data.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
+    bpy.ops.wm.save_as_mainfile(filepath=str(blend_path), check_existing=False)
 
 
 def build(config_path: Path) -> None:
@@ -93,7 +124,14 @@ def build(config_path: Path) -> None:
             armature.animation_data.nla_tracks.remove(track)
             animation_paths[clip_name] = str(clip_path)
 
-    manifest = {"character_id": config["character_id"], "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0, "unity_axes": {"forward": "-Z", "up": "Y"}}
+    # The .blend is the primary output: the rigged character as built
+    # (Bevel modifier still live on extended), its materials, and every
+    # selected clip as a named Action. Saved last so it reflects the final
+    # scene state after all exports.
+    blend_path = output_dir / f"{config['character_id']}.blend"
+    save_blend(blend_path, armature, config["clips"])
+
+    manifest = {"character_id": config["character_id"], "blend": str(blend_path), "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0, "unity_axes": {"forward": "-Z", "up": "Y"}}
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print("CHARACTER_SUITE_SUCCESS " + json.dumps(manifest))
 

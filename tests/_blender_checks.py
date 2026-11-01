@@ -97,10 +97,30 @@ def check_outputs(config_path: Path, output_dir: Path) -> None:
     expected_bones = len(ALL_BONE_NAMES) if config["rig_type"] == "extended" else len(BONE_NAMES)
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
 
-    listed = [manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(), *manifest["textures"].values()]
+    listed = [manifest["blend"], manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(), *manifest["textures"].values()]
     missing = [path for path in listed if path and not Path(path).is_file()]
     check(f"{character}: manifest files exist", not missing, f"missing {missing}")
     check(f"{character}: manifest clips match config", manifest["clips"] == config["clips"], f"{manifest['clips']} != {config['clips']}")
+
+    # .blend (primary output): character, one fake-user Action per clip,
+    # first clip assigned, rotation-only, packed textures.
+    reset()
+    bpy.ops.wm.open_mainfile(filepath=manifest["blend"])
+    armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+    meshes = [obj for obj in bpy.data.objects if obj.type == "MESH"]
+    bones = len(armatures[0].data.bones) if armatures else 0
+    check(f"{character}: .blend has one armature ({expected_bones} bones) and one mesh", len(armatures) == 1 and len(meshes) == 1 and bones == expected_bones,
+          f"armatures {len(armatures)}, meshes {len(meshes)}, bones {bones}")
+    actions = {action.name: action for action in bpy.data.actions}
+    check(f"{character}: .blend has one fake-user Action per clip", sorted(actions) == sorted(config["clips"]) and all(action.use_fake_user for action in actions.values()),
+          f"actions {[(name, action.use_fake_user) for name, action in actions.items()]}")
+    active = armatures[0].animation_data.action.name if armatures and armatures[0].animation_data and armatures[0].animation_data.action else None
+    check(f"{character}: .blend opens with the first clip assigned", active == config["clips"][0], f"active {active}")
+    moving = moving_location_curves()
+    check(f"{character}: .blend Actions are rotation-only", not moving, f"{moving[:5]}")
+    textures = [image for image in bpy.data.images if image.filepath]
+    check(f"{character}: .blend textures are packed", len(textures) == len(config["materials"]) and all(image.packed_file for image in textures),
+          f"{[(image.name, bool(image.packed_file)) for image in textures]}")
 
     # Combined FBX: bones, one take per clip, rotation-only.
     combined_takes = fbx_takes(Path(manifest["fbx"]))

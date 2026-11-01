@@ -1,10 +1,12 @@
 # Character Creation Suite
 
-Double-click `Run Character Creation Suite.bat`, load `presets/player.json` or `presets/zombie.json`, customise it, then select **Generate Unity FBX**.
+A Blender character generator: it builds a rigged, animated low-poly humanoid from a JSON preset and saves it as a `.blend`. FBX and GLB exports are written alongside for use in other apps.
+
+Double-click `Run Character Creation Suite.bat` (or run `python character_suite.py`; Blender 5.0 must be on PATH or in its default install folder), load a preset from `presets/`, customise it, then select **Generate character**.
 
 The Character tab includes a fast live silhouette preview for proportions and
 palette changes. The Materials tab has native colour pickers and swatches; the
-generated Blender GLB remains the authoritative final geometry preview.
+generated `.blend` is the authoritative final result (the GLB carries the same geometry).
 
 Each clip in the Animations tab has a **View anim in Blender** button. It opens an interactive Blender window on the character as currently configured in the tabs (proportions, materials, height) with that one clip baked and looping, so you can orbit and inspect it before committing to a build — it's the exact same rig code path as the real export (`rig_builder.py`), not a separate stand-in. Close the window when you're done; it only writes a scratch `build/_preview/character_config.json`, never anything under the character's own `build/<character-id>/` output folder.
 
@@ -12,13 +14,14 @@ The preview window is also an editor. Enter Pose Mode, adjust the bones, insert 
 
 The suite writes all generated output to `build/<character-id>/`:
 
-- `<character-id>.fbx` — Unity import asset with selected animation Takes baked in (unchanged legacy artifact).
-- `<character-id>_Model.fbx` — the same mesh and rig with no animation, for pipelines that import the model and clips as separate Unity assets.
-- `Animations/<clip-name>.fbx` — one skeleton-only FBX per selected clip, no mesh. Each shares the exact bone names and hierarchy of `<character-id>_Model.fbx`, so Unity's "copy from other Avatar" retargeting maps cleanly onto the model. Each file's single take is named after the clip (e.g. `Run`) and starts at frame 0, the same timing as the matching take in `<character-id>.fbx`. (Earlier builds named every per-clip take `Scene` and started it at frame 1.)
-- `<character-id>_Preview.glb` — bind-pose preview, not the Unity animation asset. It is exported with modifiers applied, so on `extended` builds it includes the same bevelled geometry as the FBX. (Earlier builds exported the un-bevelled mesh here.)
-- `Textures/<character-id>_<material>.png` — one small solid-colour texture per material (`skin`/`top`/`bottom`/`shoes`), wired into that material's Base Color. `<character-id>.fbx` and `<character-id>_Model.fbx` embed these directly (`embed_textures=True`) as well as referencing the standalone files, so the FBX alone is enough for Unity to show the right colours even before the `Textures/` folder is imported alongside it.
+- `<character-id>.blend` — **the primary output.** The rigged character as built (on `extended`, the Bevel modifier is left live, not applied), its materials with textures packed into the file, and every selected clip as a named Action. Each Action has a fake user so all of them are kept; switch between them in the Action Editor. The first selected clip is assigned on open, with the scene frame range set to it. Blender-native axes (Z-up), 30 fps.
+- `<character-id>.fbx` — FBX export with every selected clip baked in as a take, for game engines and other apps (axes converted to `-Z` forward, `Y` up).
+- `<character-id>_Model.fbx` — the same mesh and rig with no animation, for pipelines that import the model and clips as separate assets.
+- `Animations/<clip-name>.fbx` — one skeleton-only FBX per selected clip, no mesh. Each shares the exact bone names and hierarchy of `<character-id>_Model.fbx`, so retargeting (e.g. Unity's "copy from other Avatar") maps cleanly onto the model. Each file's single take is named after the clip (e.g. `Run`) and starts at frame 0, the same timing as the matching take in `<character-id>.fbx`. (Earlier builds named every per-clip take `Scene` and started it at frame 1.)
+- `<character-id>_Preview.glb` — bind-pose preview with no animation. It is exported with modifiers applied, so on `extended` builds it includes the same bevelled geometry as the FBX. (Earlier builds exported the un-bevelled mesh here.)
+- `Textures/<character-id>_<material>.png` — one small solid-colour texture per material (`skin`/`top`/`bottom`/`shoes`), wired into that material's Base Color. `<character-id>.fbx` and `<character-id>_Model.fbx` embed these directly (`embed_textures=True`) as well as referencing the standalone files, so the FBX alone shows the right colours even without the `Textures/` folder next to it. The `.blend` packs them too.
 - `character_config.json` — reproducible build configuration.
-- `manifest.json` — generated asset contract and validation metadata, including `model_fbx`, `animation_fbx`, and `textures` paths.
+- `manifest.json` — generated asset contract and validation metadata, including `blend`, `model_fbx`, `animation_fbx`, and `textures` paths. (Its `unity_axes` key describes the FBX axis conversion; the name is kept so existing readers don't break.)
 
 The model and per-clip animation FBX files are on by default (`export_separate_animations` in the config); set it to `false` to skip them and only produce the combined `<character-id>.fbx`.
 
@@ -26,7 +29,7 @@ The player preset includes two distinct two-handed tool clips: `MeleeAttack` for
 
 `Crouch`, `CrouchWalkRifle`, `Prone`, and `Crawl` are available as selectable clips in the Animations tab (off by default, same as `ZombieAttack` — check the box to include them in a build). `CrouchWalkRifle` is a looping crouched stride with both arms locked into a two-handed rifle-ready pose (the arms don't swing with the gait, since a held weapon shouldn't). `Crouch`'s knee bend was fixed after an initial release had the sign backwards, which folded the knee the wrong way and left the feet dangling at a broken-looking angle instead of flat on the ground — the fix (and every stride clip added alongside it) was validated by rendering the pose in headless Blender before shipping it, not just by eyeballing the numbers.
 
-`Prone` tips the whole rig forward ~80° around the hip bone's rest height so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent), rather than lying flat on the ground: because clips are rotation-only (see below), the pose cannot carry the downward offset needed to put the body at ground level. For a 1.75 m-tall character the hip pivot sits at `target_height_m * (0.90 / 2.69)` ≈ 0.59 m, so the posed mesh spans roughly 0.21–1.04 m above the ground on `standard` (0.12–1.01 m on `extended`, whose toes reach lower) until the Unity side lowers the character's root transform (and collider height) by that offset while the Prone state is active — the same way Unity, not the clip, already owns all root positioning here. These ranges are measured by `tests/smoke_test.py` (it prints them as `INFO` lines). An earlier release had the pitch sign backwards, which laid the character face-up with hyperextended elbows; the test now asserts the facing direction and elbow bend. `Crawl` is a stride cycle on top of that same face-down pose; its arm/leg swing is authored on different rotation axes than every other clip in this file (Y/Z instead of X) because composing an X-axis stride swing onto Hips' already-80-degree X pitch doesn't add cleanly — it flings the limb, confirmed by rendering it before ruling it out.
+`Prone` tips the whole rig forward ~80° around the hip bone's rest height so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent), rather than lying flat on the ground: because clips are rotation-only (see below), the pose cannot carry the downward offset needed to put the body at ground level. For a 1.75 m-tall character the hip pivot sits at `target_height_m * (0.90 / 2.69)` ≈ 0.59 m, so the posed mesh spans roughly 0.21–1.04 m above the ground on `standard` (0.12–1.01 m on `extended`, whose toes reach lower) until whatever plays the clip lowers the character by that offset while it's prone — in Blender, move the armature object down; in a game engine, the root transform (and collider). Clips never position the root; that's always left to the scene or engine. These ranges are measured by `tests/smoke_test.py` (it prints them as `INFO` lines). An earlier release had the pitch sign backwards, which laid the character face-up with hyperextended elbows; the test now asserts the facing direction and elbow bend. `Crawl` is a stride cycle on top of that same face-down pose; its arm/leg swing is authored on different rotation axes than every other clip in this file (Y/Z instead of X) because composing an X-axis stride swing onto Hips' already-80-degree X pitch doesn't add cleanly — it flings the limb, confirmed by rendering it before ruling it out.
 
 ### Rig types
 
@@ -42,9 +45,10 @@ Every built-in clip has an `Extended`-suffixed sibling (`IdleExtended`, `RunExte
 
 ## Testing
 
-`tests/smoke_test.py` is a headless end-to-end check. It builds every preset in `presets/` plus an "every clip" character on both rig types, each through the real `blender_build.py` in a fresh Blender process (the same path as **Generate Unity FBX**), then inspects the outputs from inside Blender:
+`tests/smoke_test.py` is a headless end-to-end check. It builds every preset in `presets/` plus an "every clip" character on both rig types, each through the real `blender_build.py` in a fresh Blender process (the same path as **Generate character**), then inspects the outputs from inside Blender:
 
 - every file listed in `manifest.json` exists;
+- the `.blend` opens with the armature, mesh, one fake-user Action per clip (rotation-only), the first clip assigned, and packed textures;
 - bone counts are right (16 `standard`, 52 `extended`) in the combined and model FBX;
 - no take has moving location keys (the rotation-only contract);
 - the combined FBX has one take per clip, and each per-clip FBX has one take named after its clip with the same frame range;
@@ -57,13 +61,13 @@ python tests/smoke_test.py --blender "C:\Program Files\Blender Foundation\Blende
 python tests/smoke_test.py --bpy-python <python with "pip install bpy">
 ```
 
-It writes only to a temporary folder (pass `--keep` to keep it) and exits non-zero if any check fails. It needs no Unity and no tkinter. It does not test the GUI, the interactive Blender preview/editor, or how Unity imports the files.
+It writes only to a temporary folder (pass `--keep` to keep it) and exits non-zero if any check fails. It needs no tkinter. It does not test the GUI, the interactive Blender preview/editor, or how other apps (e.g. game engines) import the FBX.
 
 ## Design boundaries
 
 - Two selectable rig hierarchies (`rig_type`): fixed 16-bone `standard`, or 52-bone `extended` (adds a subdivided spine, shoulders, toes, and full 3-segment-per-finger hands). Proportions, materials, height, and clip selection are configurable on either.
-- Every generated clip has rotation-only bone keys. Root translation/root motion is never authored — this is why `Prone` needs a Unity-side root offset rather than being baked into the clip (see above).
-- Unity Animation Events remain Unity-side concerns and are intentionally not generated.
-- FBX export uses the known Unity settings: `-Z` forward, `Y` up, all Actions as Takes, and no leaf bones.
+- Every generated clip has rotation-only bone keys. Root translation/root motion is never authored — this is why `Prone` needs the character lowered by the scene or engine rather than having it baked into the clip (see above).
+- Animation events/markers for game engines are intentionally not generated.
+- The `.blend` is Blender-native. Only the FBX export converts axes, using Unity-style settings: `-Z` forward, `Y` up, all Actions as takes, and no leaf bones.
 - Each of the 4 materials (`skin`/`top`/`bottom`/`shoes`) is backed by a small solid-colour PNG texture (see "Textures" below), not just a flat material value, and every body part is skinned to one of those 4 — there's no per-body-part texture, since most parts sharing a material would just be pixel-identical duplicates of it.
-- The original `create_character_and_animations.py` and `create_zombie_and_animations.py` are retained unchanged as legacy references until this suite has been tested in Unity.
+- The original `create_character_and_animations.py` and `create_zombie_and_animations.py` are retained unchanged as legacy references.

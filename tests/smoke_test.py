@@ -2,10 +2,12 @@
 
 Builds every preset in presets/ plus an "every clip" build on both rig
 types, using the real export worker (blender_build.py) in a fresh Blender
-process per build, exactly as the GUI's "Generate Unity FBX" does. Then it
+process per build, exactly as the GUI's "Generate character" does. Then it
 inspects the outputs from inside Blender (tests/_blender_checks.py):
 
 - every file listed in manifest.json exists;
+- the .blend (primary output) has the armature, mesh, one fake-user
+  Action per clip (rotation-only), the first clip assigned, packed textures;
 - bone counts (16 standard / 52 extended) in the combined and model FBX;
 - rotation-only contract: no moving location curves in any take;
 - one take per selected clip in the combined FBX, and per-clip FBX takes
