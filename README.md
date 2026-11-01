@@ -21,7 +21,7 @@ The suite writes all generated output to `build/<character-id>/`:
 - `<character-id>_Preview.glb` — bind-pose preview with no animation. It is exported with modifiers applied, so on `extended` builds it includes the same bevelled geometry as the FBX. (Earlier builds exported the un-bevelled mesh here.)
 - `Textures/<character-id>_<material>.png` — one small solid-colour texture per material (`skin`/`top`/`bottom`/`shoes`), wired into that material's Base Color. `<character-id>.fbx` and `<character-id>_Model.fbx` embed these directly (`embed_textures=True`) as well as referencing the standalone files, so the FBX alone shows the right colours even without the `Textures/` folder next to it. The `.blend` packs them too.
 - `character_config.json` — reproducible build configuration.
-- `manifest.json` — generated asset contract and validation metadata, including `blend`, `model_fbx`, `animation_fbx`, and `textures` paths. (Its `unity_axes` key describes the FBX axis conversion; the name is kept so existing readers don't break.)
+- `manifest.json` — generated asset contract and validation metadata, including `blend`, `model_fbx`, `animation_fbx`, and `textures` paths.
 
 The model and per-clip animation FBX files are on by default (`export_separate_animations` in the config); set it to `false` to skip them and only produce the combined `<character-id>.fbx`.
 

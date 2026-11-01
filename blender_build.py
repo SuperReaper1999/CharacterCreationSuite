@@ -131,7 +131,7 @@ def build(config_path: Path) -> None:
     blend_path = output_dir / f"{config['character_id']}.blend"
     save_blend(blend_path, armature, config["clips"])
 
-    manifest = {"character_id": config["character_id"], "blend": str(blend_path), "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0, "unity_axes": {"forward": "-Z", "up": "Y"}}
+    manifest = {"character_id": config["character_id"], "blend": str(blend_path), "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0}
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print("CHARACTER_SUITE_SUCCESS " + json.dumps(manifest))
 
