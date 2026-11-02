@@ -14,6 +14,8 @@ BUILTIN_CLIPS = (
     "MeleeAttack", "HarvestSwing", "Punch", "Kick", "Throw", "Fire", "PistolIdle", "PistolFire", "Reload", "HitReact", "Death",
     "Wave", "Point", "ThumbsUp", "MiddleFinger", "Peace", "OKSign", "Handshake", "Talk", "PickUp", "Interact",
     "ZombieWalk", "ZombieAttack",
+    "SitChair", "SitBench", "SitTyping", "Drive", "DriveSteerLeft", "DriveSteerRight", "LieDown",
+    "PhoneCall", "PhoneLook", "Drink", "CarryIdle", "CarryWalk", "OpenDoor", "PullLever", "Kneel", "ClimbLadder",
 )
 # Suffix older configs used for the 52-bone versions of the built-in clips
 # (e.g. "IdleExtended"), from when a 16-bone rig also existed. Those

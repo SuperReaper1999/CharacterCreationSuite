@@ -9,7 +9,7 @@ The character itself comes from [MPFB](https://extensions.blender.org/add-ons/mp
 - a textured outfit and shoes, fitted to the body;
 - MPFB's `game_engine` rig: 53 bones, including 3 bones per finger on both hands, with skin weights for the body and every clothing item.
 
-The suite adds the config/preset workflow, colour slots, 35 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
+The suite adds the config/preset workflow, colour slots, 51 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
 
 ## Setup
 
@@ -94,7 +94,7 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 
 ## Animations
 
-35 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
+51 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
 
 | Clip | Frames | Loops | Notes |
 |---|---|---|---|
@@ -135,6 +135,22 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 | `Talk` | 97 | yes | Conversational gestures with both hands, small nods and torso movement. |
 | `PickUp` | 40 | no | Crouch and reach (14), grab (18), stand holding it (32). |
 | `Interact` | 30 | no | Reach out with the index finger and press (12), e.g. a button. |
+| **Seated and utility** | | | |
+| `SitChair` | 60 | yes | Upright on a chair, hands resting on the thighs. |
+| `SitBench` | 60 | yes | Leaning forward on a bench, forearms on the knees. |
+| `SitTyping` | 25 | yes | Seated at a desk, hands on a keyboard, fingers tapping. |
+| `Drive` | 60 | yes | Car seat (reclined, legs forward), hands at 10 and 2 on the wheel. |
+| `DriveSteerLeft` / `DriveSteerRight` | 30 | yes | Same, wheel held turned 45° left / right. |
+| `LieDown` | 60 | yes | Lying on the back (bed or ground). |
+| `PhoneCall` | 90 | yes | Phone held at the right ear. |
+| `PhoneLook` | 40 | yes | Phone held in front of the chest with both hands, looking down, thumb tapping. |
+| `Drink` | 50 | no | Cup raised to just in front of the mouth (14), sip (28), lowered. |
+| `CarryIdle` | 60 | yes | Holding a box (about 40 cm wide) in front with both hands. |
+| `CarryWalk` | 33 | yes | `Walk` legs with the `CarryIdle` arms. |
+| `OpenDoor` | 40 | no | Reach for a handle at waist height (10), grip (14), pull back (26), release (32). |
+| `PullLever` | 40 | no | Grab a lever above the head with both hands (10), pull it down to chest height with a slight crouch (22). |
+| `Kneel` | 60 | yes | Down on the right knee, left forearm resting on the left knee. |
+| `ClimbLadder` | 31 | yes | In-place climb cycle: hands alternate on rungs, legs step. |
 
 The player preset selects `Idle`, `Run`, `Jump`, `MeleeAttack`, `HarvestSwing`, `Fire` and `Sit`; tick any others in the Animations tab.
 
@@ -149,6 +165,8 @@ The player preset selects `Idle`, `Run`, `Jump`, `MeleeAttack`, `HarvestSwing`, 
 Custom clips saved from the preview editor are stored in the character's own bone space and keyed directly. Custom clips saved by earlier versions (Euler degrees on authoring bone names) are retargeted like the built-ins.
 
 **Ground contact.** Bones only rotate, so poses that pivot around the hips (`Prone`, `Crawl`, `Death`, `Crouch`, `Sit`, `PickUp`, `Kick`…) would hover above the floor. So after each clip is baked, the build steps through every frame, finds the lowest point of the character's meshes (shoes, body, clothes, hair), and keys a vertical offset on the rig's `Root` bone so that point sits exactly at Z = 0 (`retarget.ground_clip`). In-place loops like `Walk` and `Run` stay in place and pick up a natural bob; nothing moves the character forward, and `Jump` has no airtime. This is the only location channel any clip has. Set `ground_contact` to `false` in the config to switch it off, and the clips are then purely rotations again. The preview editor doesn't save the `Root` channel; it's recomputed for each character.
+
+**Hands placed by IK.** For the seated and utility clips, the arm angles were found with an IK search on the MPFB character. The upper arm and elbow are chosen so the centre of the palm lands on a target point (wheel rim, ear, mouth, keyboard, box sides, door handle, lever, rungs, knee), with the elbow kept below the hand and the hand clear of the body. The resulting angles are written into the clips with a "solved" comment. Seat height comes from ground contact: with the feet on the floor, the hips end up at seat height. There are no props; the hands mime the chair, wheel, phone, cup and box.
 
 **Arm poses checked on the character.** Every keyframe of every clip was measured on the MPFB character for hand/forearm skin inside the torso, head or legs, and for hand spacing. As a result:
 - The two-handed clips (`MeleeAttack`, `HarvestSwing`, `CrouchWalkRifle`) now keep both hands on the handle: about 25 cm apart for the tool swings, 42 cm for the rifle (support hand on the handguard). They were 60–90 cm apart.

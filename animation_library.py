@@ -281,6 +281,12 @@ _HAND_SHAPES = {
     # Index/thumb from a numeric search on the MPFB character: of the
     # candidates whose fingertip skin touches (under 1 mm), the one with the
     # least overlap.
+    # Holding shapes for the seated/utility clips.
+    "relaxed_open": {"fingers": {finger: (15, 20, 12) for finger in _FINGERS}, "thumb": ((-15, 0, -5), (0, 0, -10), (0, 0, -5))},
+    "wheel": {"fingers": {finger: (60, 70, 45) for finger in _FINGERS}, "thumb": ((-30, 0, -10), (0, 0, -15), (0, 0, -10))},
+    "cup": {"fingers": {finger: (40, 45, 30) for finger in _FINGERS}, "thumb": ((-35, 0, -20), (0, 0, -15), (0, 0, -10))},
+    "phone": {"fingers": {finger: (35, 45, 30) for finger in _FINGERS}, "thumb": ((-20, 0, -10), (0, 0, -10), (0, 0, -10))},
+    "typing": {"fingers": {finger: (25, 30, 20) for finger in _FINGERS}, "thumb": ((-20, 0, -10), (0, 0, -10), (0, 0, -5))},
     "ok": {"fingers": {"Index": (40, 55, 40), "Middle": (5, 8, 5), "Ring": (8, 10, 6), "Little": (10, 12, 8)},
            "thumb": ((-10, 0, -30), (0, 0, -30), (0, 0, -30)), "spread": {"Middle": -3, "Ring": -8, "Little": -14}},
 }
@@ -504,5 +510,94 @@ def _more_clips() -> dict[str, dict[str, Any]]:
     reach = {"UpperArm.R": r(55, 0, 5), "Forearm.R": r(45), **_hand("R", "point"), "Head": r(-8)}
     press = _merge(reach, {"UpperArm.R": r(65, 0, 5), "Forearm.R": r(25)})
     clips["Interact"] = {"frames": 30, "loop": False, "poses": {1: rest, 8: reach, 12: press, 18: reach, 30: rest}}
+
+    # --- Seated and utility ---------------------------------------------
+    # Arm angles marked "solved" were found with an IK search on the MPFB
+    # character: upper arm and elbow chosen so the centre of the palm lands
+    # on a target point (wheel rim, ear, mouth, keyboard, box sides, door
+    # handle, lever, knee), with the elbow kept below the hand. Bones only
+    # rotate, so ground contact sets the seat height: for a chair the feet
+    # are on the floor and the hips end up at seat height. There is no
+    # chair, wheel or phone; the hands mime them.
+    def arms(left=None, right=None):
+        """(upper arm xyz, forearm x) per side -> arm keys."""
+        keys = {}
+        for side, values in (("L", left), ("R", right)):
+            if values:
+                (x, y, z), forearm = values
+                keys[f"UpperArm.{side}"] = r(x, y, z)
+                keys[f"Forearm.{side}"] = r(forearm)
+        return keys
+
+    def hands(shape_left, shape_right=None):
+        return {**_hand("L", shape_left), **_hand("R", shape_right or shape_left)}
+
+    seat = {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90)}
+    chair = {**seat, "Chest": r(-4), **arms(((-20.8, 14.5, -5.7), 104.9), ((-20.8, -14.5, 5.7), 104.9)), **hands("relaxed_open")}  # solved: hands on the thighs
+    clips["SitChair"] = {"frames": 60, "loop": True, "poses": {1: chair, 30: _merge(chair, {"Chest": r(-5), "Head": r(-2)}), 60: chair}}
+
+    bench = {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-85), "LowerLeg.R": r(-85), "Chest": r(-28), "Head": r(14),
+             **arms(((38.9, 6.9, -15.1), 67.7), ((38.9, -6.9, 15.1), 67.7)), **hands("relaxed_open")}  # solved: forearms on the knees, hands in front
+    clips["SitBench"] = {"frames": 60, "loop": True, "poses": {1: bench, 30: _merge(bench, {"Chest": r(-29), "Head": r(12, 4)}), 60: bench}}
+
+    typing_base = {**seat, "Chest": r(-6), "Head": r(-12), **arms(((2.3, 9.0, -12.0), 63.8), ((2.3, -9.0, 12.0), 63.7))}  # solved: hands on a desk keyboard
+
+    def taps(left_finger, right_finger):
+        keys = hands("typing")
+        for side, finger in (("L", left_finger), ("R", right_finger)):
+            for segment, degrees in enumerate((40, 40, 25), start=1):
+                keys[f"{finger}{segment}.{side}"] = _curl(degrees, side)
+        return keys
+    clips["SitTyping"] = {"frames": 25, "loop": True, "poses": {
+        1: {**typing_base, **taps("Index", "Middle")}, 7: {**typing_base, **taps("Middle", "Index")},
+        13: {**typing_base, **taps("Ring", "Ring")}, 19: {**typing_base, **taps("Index", "Little")}, 25: {**typing_base, **taps("Index", "Middle")}}}
+
+    car_seat = {"Chest": r(14), "UpperLeg.L": r(70), "UpperLeg.R": r(70), "LowerLeg.L": r(-45), "LowerLeg.R": r(-45), "Foot.L": r(15), "Foot.R": r(15), **hands("wheel")}
+    drive = {**car_seat, **arms(((5.6, 1.0, -12.3), 70.1), ((5.6, -1.0, 12.3), 70.1))}  # solved: hands at 10 and 2 on a 38 cm wheel
+    steer_left = {**car_seat, **arms(((3.3, -2.8, -12.0), 56.8), ((16.2, -17.1, 14.4), 70.0))}  # solved: wheel turned 45 degrees left
+    steer_right = {**car_seat, **arms(((16.2, 17.1, -14.4), 70.0), ((3.3, 2.8, 12.0), 56.9))}  # solved: wheel turned 45 degrees right
+    clips["Drive"] = {"frames": 60, "loop": True, "poses": {1: drive, 30: _merge(drive, {"Head": r(-1, 3)}), 60: drive}}
+    clips["DriveSteerLeft"] = {"frames": 30, "loop": True, "poses": {1: steer_left, 30: steer_left}}
+    clips["DriveSteerRight"] = {"frames": 30, "loop": True, "poses": {1: steer_right, 30: steer_right}}
+
+    lying = {"Hips": r(88), "Head": r(-12), "UpperArm.L": r(0, 0, 15), "UpperArm.R": r(0, 0, -15), "Forearm.L": r(10), "Forearm.R": r(10), **hands("relaxed_open")}
+    clips["LieDown"] = {"frames": 60, "loop": True, "poses": {1: lying, 30: _merge(lying, {"Chest": r(1)}), 60: lying}}
+
+    phone_call = {"Head": r(-4, 0, -8), **arms(right=((54.6, -3.5, -13.5), 150.0)), **_hand("R", "phone")}  # solved: phone at the right ear
+    clips["PhoneCall"] = {"frames": 90, "loop": True, "poses": {1: phone_call, 45: _merge(phone_call, {"Head": r(-6, 4, -8)}), 90: phone_call}}
+
+    def phone_look(thumb_bend):
+        pose = {"Head": r(-28), "Chest": r(-4), **arms(((-4.4, 30.3, -11.4), 103.1), ((-12.5, -19.7, 16.1), 112.9)), **hands("phone")}  # solved: phone held in front of the chest
+        pose["Thumb3.R"] = _side("R", 0, 0, -thumb_bend)
+        return pose
+    clips["PhoneLook"] = {"frames": 40, "loop": True, "poses": {1: phone_look(10), 10: phone_look(35), 20: phone_look(10), 30: phone_look(30), 40: phone_look(10)}}
+
+    sip = {"Head": r(6), **arms(right=((59.3, -17.2, -13.6), 125.0)), **_hand("R", "cup")}  # solved: cup just in front of the mouth
+    holding_cup = {"UpperArm.R": r(15, 0, 4), "Forearm.R": r(80), **_hand("R", "cup")}
+    clips["Drink"] = {"frames": 50, "loop": False, "poses": {1: holding_cup, 14: sip, 28: _merge(sip, {"Head": r(12)}), 38: holding_cup, 50: holding_cup}}
+
+    carry = {"Chest": r(4), **arms(((-9.5, -2.4, -8.8), 66.3), ((-9.5, 2.4, 8.8), 66.3)), **hands("relaxed_open")}  # solved: hands on the sides of a 40 cm box
+    clips["CarryIdle"] = {"frames": 60, "loop": True, "poses": {1: carry, 30: _merge(carry, {"Chest": r(5)}), 60: carry}}
+    legs_only = lambda pose: {bone: value for bone, value in pose.items() if bone.split(".")[0] in ("UpperLeg", "LowerLeg", "Foot")}
+    carry_walk = [{**legs_only(pose), **carry} for pose in (walk_contact, walk_passing, _mirror(walk_contact), _mirror(walk_passing))]
+    clips["CarryWalk"] = {"frames": 33, "loop": True, "poses": _cycle((1, 9, 17, 25, 33), [*carry_walk, carry_walk[0]])}
+
+    door_reach = {"Chest": r(-6, -10), **arms(right=((23.5, 3.8, 20.3), 40.0))}  # solved: handle at waist height, front right
+    door_pull = {"Chest": r(2, -14), **arms(right=((2.0, 2.8, 12.0), 52.6))}  # solved: handle pulled back toward the hip
+    clips["OpenDoor"] = {"frames": 40, "loop": False, "poses": {1: rest, 10: {**door_reach, **_hand("R", "open")}, 14: {**door_reach, **_hand("R", "grip")},
+                                                                  26: {**door_pull, **_hand("R", "grip")}, 32: {**door_pull, **_hand("R", "open")}, 40: rest}}
+
+    lever_grab = {"Chest": r(4), **arms(((57.3, 12.9, 4.4), 100.9), ((57.3, -12.9, -4.4), 100.9)), **hands("fist")}  # solved: lever above the head, in front
+    lever_pulled = {"Chest": r(-10), "UpperLeg.L": r(20), "UpperLeg.R": r(20), "LowerLeg.L": r(-30), "LowerLeg.R": r(-30), "Foot.L": r(10), "Foot.R": r(10),
+                    **arms(((10.5, 17.5, -11.3), 91.4), ((10.5, -17.5, 11.3), 91.4)), **hands("fist")}  # solved: pulled down to chest height
+    clips["PullLever"] = {"frames": 40, "loop": False, "poses": {1: rest, 10: lever_grab, 22: lever_pulled, 30: lever_pulled, 40: rest}}
+
+    kneel = {"UpperLeg.L": r(90), "LowerLeg.L": r(-90), "UpperLeg.R": r(-5), "LowerLeg.R": r(-90), "Foot.R": r(-40), "Chest": r(-10),
+             **arms(left=((15.0, 2.5, -13.6), 77.2)), **hands("relaxed_open")}  # solved: left forearm resting on the left knee
+    clips["Kneel"] = {"frames": 60, "loop": True, "poses": {1: kneel, 30: _merge(kneel, {"Chest": r(-11), "Head": r(-3)}), 60: kneel}}
+
+    ladder = {"UpperLeg.L": r(55), "LowerLeg.L": r(-85), "Foot.L": r(20), "UpperLeg.R": r(15), "LowerLeg.R": r(-25),
+              **arms(((75.4, -5.1, -4.2), 104.0), ((-7.5, -6.3, 3.0), 129.4)), **hands("grip")}  # solved: hands on rungs 40 cm apart
+    clips["ClimbLadder"] = {"frames": 31, "loop": True, "poses": {1: ladder, 16: _mirror(ladder), 31: ladder}}
 
     return clips
