@@ -602,4 +602,28 @@ def _more_clips() -> dict[str, dict[str, Any]]:
               **arms(((75.4, -5.1, -4.2), 104.0), ((-7.5, -6.3, 3.0), 129.4)), **hands("grip")}  # solved: hands on rungs 40 cm apart
     clips["ClimbLadder"] = {"frames": 31, "loop": True, "poses": {1: ladder, 16: _mirror(ladder), 31: ladder}}
 
+    # --- Falling and landing ---------------------------------------------
+    # Fall: airborne loop, arms up and out for balance, legs loosely bent
+    # and slowly pedalling, head looking down at the ground. In place like
+    # Jump (nothing moves the character vertically; ground contact keeps the
+    # lowest point at Z = 0), so the game or Blender scene supplies the drop.
+    # Land: impact into a deep crouch with the arms coming down in front,
+    # then standing back up to rest.
+    fall_a = {"Chest": r(6), "Head": r(-10),
+              "UpperArm.L": r(20, 0, 70), "UpperArm.R": r(25, 0, -75), "Forearm.L": r(35), "Forearm.R": r(30),
+              "UpperLeg.L": r(30), "LowerLeg.L": r(-45), "Foot.L": r(-10), "UpperLeg.R": r(10), "LowerLeg.R": r(-25), "Foot.R": r(-15),
+              **hands("relaxed_open")}
+    fall_b = {**fall_a, "Chest": r(7, 2), "Head": r(-12),
+              "UpperArm.L": r(25, 0, 75), "UpperArm.R": r(20, 0, -70), "Forearm.L": r(30), "Forearm.R": r(35),
+              "UpperLeg.L": r(10), "LowerLeg.L": r(-25), "Foot.L": r(-15), "UpperLeg.R": r(30), "LowerLeg.R": r(-45), "Foot.R": r(-10)}
+    clips["Fall"] = {"frames": 31, "loop": True, "poses": {1: fall_a, 16: fall_b, 31: fall_a}}
+
+    impact = {"UpperLeg.L": r(70), "UpperLeg.R": r(70), "LowerLeg.L": r(-110), "LowerLeg.R": r(-110), "Foot.L": r(40), "Foot.R": r(40),
+              "Chest": r(-25), "Head": r(12),
+              "UpperArm.L": r(30, 0, 18), "UpperArm.R": r(30, 0, -18), "Forearm.L": r(30), "Forearm.R": r(30), **hands("relaxed_open")}
+    settle = {"UpperLeg.L": r(55), "UpperLeg.R": r(55), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "Foot.L": r(35), "Foot.R": r(35),
+              "Chest": r(-15), "Head": r(6),
+              "UpperArm.L": r(20, 0, 12), "UpperArm.R": r(20, 0, -12), "Forearm.L": r(25), "Forearm.R": r(25), **hands("relaxed_open")}
+    clips["Land"] = {"frames": 30, "loop": False, "poses": {1: fall_a, 4: impact, 10: settle, 30: rest}}
+
     return clips
