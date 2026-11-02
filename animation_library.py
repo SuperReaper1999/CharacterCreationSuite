@@ -283,6 +283,8 @@ _HAND_SHAPES = {
     # least overlap.
     # Holding shapes for the seated/utility clips.
     "relaxed_open": {"fingers": {finger: (15, 20, 12) for finger in _FINGERS}, "thumb": ((-15, 0, -5), (0, 0, -10), (0, 0, -5))},
+    # Flat for hands resting on a surface (a curled little finger dips into it).
+    "resting": {"fingers": {finger: (5, 8, 5) for finger in _FINGERS}, "thumb": ((-15, 0, -5), (0, 0, -5), (0, 0, -5))},
     "wheel": {"fingers": {finger: (60, 70, 45) for finger in _FINGERS}, "thumb": ((-30, 0, -10), (0, 0, -15), (0, 0, -10))},
     "cup": {"fingers": {finger: (40, 45, 30) for finger in _FINGERS}, "thumb": ((-35, 0, -20), (0, 0, -15), (0, 0, -10))},
     "phone": {"fingers": {finger: (35, 45, 30) for finger in _FINGERS}, "thumb": ((-20, 0, -10), (0, 0, -10), (0, 0, -10))},
@@ -533,14 +535,14 @@ def _more_clips() -> dict[str, dict[str, Any]]:
         return {**_hand("L", shape_left), **_hand("R", shape_right or shape_left)}
 
     seat = {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90)}
-    chair = {**seat, "Chest": r(-4), **arms(((-20.8, 14.5, -5.7), 104.9), ((-20.8, -14.5, 5.7), 104.9)), **hands("relaxed_open")}  # solved: hands on the thighs
+    chair = {**seat, "Chest": r(-4), **arms(((-23.1, 14.2, -5.4), 107.5), ((-23.1, -14.2, 5.5), 107.5)), **hands("resting")}  # solved: hands on the thighs
     clips["SitChair"] = {"frames": 60, "loop": True, "poses": {1: chair, 30: _merge(chair, {"Chest": r(-5), "Head": r(-2)}), 60: chair}}
 
     bench = {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-85), "LowerLeg.R": r(-85), "Chest": r(-28), "Head": r(14),
              **arms(((38.9, 6.9, -15.1), 67.7), ((38.9, -6.9, 15.1), 67.7)), **hands("relaxed_open")}  # solved: forearms on the knees, hands in front
     clips["SitBench"] = {"frames": 60, "loop": True, "poses": {1: bench, 30: _merge(bench, {"Chest": r(-29), "Head": r(12, 4)}), 60: bench}}
 
-    typing_base = {**seat, "Chest": r(-6), "Head": r(-12), **arms(((2.3, 9.0, -12.0), 63.8), ((2.3, -9.0, 12.0), 63.7))}  # solved: hands on a desk keyboard
+    typing_base = {**seat, "Chest": r(-6), "Head": r(-12), **arms(((3.2, 8.9, -11.9), 71.9), ((3.2, -8.9, 11.9), 71.9))}  # solved: hands on a desk keyboard
 
     def taps(left_finger, right_finger):
         keys = hands("typing")
@@ -553,9 +555,9 @@ def _more_clips() -> dict[str, dict[str, Any]]:
         13: {**typing_base, **taps("Ring", "Ring")}, 19: {**typing_base, **taps("Index", "Little")}, 25: {**typing_base, **taps("Index", "Middle")}}}
 
     car_seat = {"Chest": r(14), "UpperLeg.L": r(70), "UpperLeg.R": r(70), "LowerLeg.L": r(-45), "LowerLeg.R": r(-45), "Foot.L": r(15), "Foot.R": r(15), **hands("wheel")}
-    drive = {**car_seat, **arms(((5.6, 1.0, -12.3), 70.1), ((5.6, -1.0, 12.3), 70.1))}  # solved: hands at 10 and 2 on a 38 cm wheel
-    steer_left = {**car_seat, **arms(((3.3, -2.8, -12.0), 56.8), ((16.2, -17.1, 14.4), 70.0))}  # solved: wheel turned 45 degrees left
-    steer_right = {**car_seat, **arms(((16.2, 17.1, -14.4), 70.0), ((3.3, 2.8, 12.0), 56.9))}  # solved: wheel turned 45 degrees right
+    drive = {**car_seat, **arms(((9.6, 6.9, -7.3), 69.5), ((9.6, -6.9, 7.3), 69.5))}  # solved: hands at 10 and 2 on a 38 cm wheel
+    steer_left = {**car_seat, **arms(((5.6, -2.7, -12.3), 55.4), ((18.6, -18.2, 12.8), 74.4))}  # solved: wheel turned 45 degrees left
+    steer_right = {**car_seat, **arms(((18.6, 18.2, -12.8), 74.4), ((5.6, 2.7, 12.3), 55.4))}  # solved: wheel turned 45 degrees right
     clips["Drive"] = {"frames": 60, "loop": True, "poses": {1: drive, 30: _merge(drive, {"Head": r(-1, 3)}), 60: drive}}
     clips["DriveSteerLeft"] = {"frames": 30, "loop": True, "poses": {1: steer_left, 30: steer_left}}
     clips["DriveSteerRight"] = {"frames": 30, "loop": True, "poses": {1: steer_right, 30: steer_right}}
@@ -563,11 +565,11 @@ def _more_clips() -> dict[str, dict[str, Any]]:
     lying = {"Hips": r(88), "Head": r(-12), "UpperArm.L": r(0, 0, 15), "UpperArm.R": r(0, 0, -15), "Forearm.L": r(10), "Forearm.R": r(10), **hands("relaxed_open")}
     clips["LieDown"] = {"frames": 60, "loop": True, "poses": {1: lying, 30: _merge(lying, {"Chest": r(1)}), 60: lying}}
 
-    phone_call = {"Head": r(-4, 0, -8), **arms(right=((54.6, -3.5, -13.5), 150.0)), **_hand("R", "phone")}  # solved: phone at the right ear
+    phone_call = {"Head": r(-4, 0, -8), **arms(right=((50.0, 1.4, -9.1), 150.0)), **_hand("R", "phone")}  # solved: phone at the right ear
     clips["PhoneCall"] = {"frames": 90, "loop": True, "poses": {1: phone_call, 45: _merge(phone_call, {"Head": r(-6, 4, -8)}), 90: phone_call}}
 
     def phone_look(thumb_bend):
-        pose = {"Head": r(-28), "Chest": r(-4), **arms(((-4.4, 30.3, -11.4), 103.1), ((-12.5, -19.7, 16.1), 112.9)), **hands("phone")}  # solved: phone held in front of the chest
+        pose = {"Head": r(-28), "Chest": r(-4), **arms(((5.9, 21.5, -17.3), 88.6), ((4.5, -19.2, 13.1), 98.7)), **hands("phone")}  # solved: phone held in front of the chest
         pose["Thumb3.R"] = _side("R", 0, 0, -thumb_bend)
         return pose
     clips["PhoneLook"] = {"frames": 40, "loop": True, "poses": {1: phone_look(10), 10: phone_look(35), 20: phone_look(10), 30: phone_look(30), 40: phone_look(10)}}
@@ -589,7 +591,7 @@ def _more_clips() -> dict[str, dict[str, Any]]:
 
     lever_grab = {"Chest": r(4), **arms(((57.3, 12.9, 4.4), 100.9), ((57.3, -12.9, -4.4), 100.9)), **hands("fist")}  # solved: lever above the head, in front
     lever_pulled = {"Chest": r(-10), "UpperLeg.L": r(20), "UpperLeg.R": r(20), "LowerLeg.L": r(-30), "LowerLeg.R": r(-30), "Foot.L": r(10), "Foot.R": r(10),
-                    **arms(((10.5, 17.5, -11.3), 91.4), ((10.5, -17.5, 11.3), 91.4)), **hands("fist")}  # solved: pulled down to chest height
+                    **arms(((24.8, 14.2, -13.2), 72.6), ((24.8, -14.2, 13.2), 72.6)), **hands("fist")}  # solved: pulled down to chest height
     clips["PullLever"] = {"frames": 40, "loop": False, "poses": {1: rest, 10: lever_grab, 22: lever_pulled, 30: lever_pulled, 40: rest}}
 
     kneel = {"UpperLeg.L": r(90), "LowerLeg.L": r(-90), "UpperLeg.R": r(-5), "LowerLeg.R": r(-90), "Foot.R": r(-40), "Chest": r(-10),
