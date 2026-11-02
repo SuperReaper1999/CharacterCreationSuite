@@ -9,7 +9,7 @@ The character itself comes from [MPFB](https://extensions.blender.org/add-ons/mp
 - a textured outfit and shoes, fitted to the body;
 - MPFB's `game_engine` rig: 53 bones, including 3 bones per finger on both hands, with skin weights for the body and every clothing item.
 
-The suite adds the config/preset workflow, colour slots, 12 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
+The suite adds the config/preset workflow, colour slots, 33 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
 
 ## Setup
 
@@ -72,30 +72,57 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 
 ## Animations
 
-12 built-in clips, all rotation-only:
+33 built-in clips, all rotation-only. Gestures and one-handed actions use the right hand.
 
 | Clip | Frames | Loops | Notes |
 |---|---|---|---|
+| **Locomotion** | | | |
 | `Idle` | 60 | yes | Subtle breathing sway. |
+| `Walk` | 33 | yes | Walk cycle: contact and passing poses, opposite arm swing. |
 | `Run` | 31 | yes | Alternating leg/arm stride. |
+| `Sprint` | 25 | yes | Deep, forward-leaning stride with pumping fists. |
+| `StrafeLeft` / `StrafeRight` | 33 | yes | Side-stepping: one leg steps out, stance widens, the other follows. |
 | `Jump` | 46 | no | Crouch, launch, land. |
-| `MeleeAttack` | 30 | no | Two-handed overhead heavy strike. |
-| `HarvestSwing` | 32 | no | Two-handed downward tool stroke; contact at frame 16 (0.5 s at 30 fps). |
-| `Fire` | 12 | no | Short right-arm recoil. |
-| `Sit` | 30 | yes | Seated, knees at 90°. |
 | `Crouch` | 30 | yes | Held crouch, feet flat. |
 | `CrouchWalkRifle` | 31 | yes | Crouched stride with both arms held forward in a two-handed rifle-ready pose. |
 | `Prone` | 30 | yes | Lying face-down (see below). |
 | `Crawl` | 31 | yes | Stride cycle on the face-down pose. |
+| `Sit` | 30 | yes | Seated, knees at 90°. |
+| `ZombieWalk` | 49 | yes | Shamble: arms raised forward, limp wrists, lolling head, dragging right leg. |
+| **Combat and reactions** | | | |
+| `MeleeAttack` | 30 | no | Two-handed overhead heavy strike. |
+| `HarvestSwing` | 32 | no | Two-handed downward tool stroke; contact at frame 16 (0.5 s at 30 fps). |
+| `Punch` | 32 | no | From a boxing guard: left jab (frame 6), back to guard, right cross (frame 18). |
+| `Kick` | 32 | no | Right front kick from guard: chamber (8), extend (13), rechamber (18). |
+| `Throw` | 36 | no | Overhand: arm cocked behind the head (10), release (16), follow-through (24). |
+| `Fire` | 12 | no | Short right-arm recoil. |
+| `PistolIdle` | 60 | yes | One-handed aim, arm extended, pistol grip with trigger finger. |
+| `PistolFire` | 12 | no | Trigger squeeze (2) and recoil (3) from the PistolIdle aim. |
+| `Reload` | 55 | no | Rifle held ready; left hand to the magazine, to the pouch, back, then the charging handle. |
+| `HitReact` | 20 | no | Flinch: chest and head snap back, then recover. |
+| `Death` | 45 | no | Knees buckle, falls backwards, ends lying on the back (see below). |
 | `ZombieAttack` | 30 | no | Two-armed lunge. |
+| **Gestures and interaction** | | | |
+| `Wave` | 50 | no | Arm raised, open hand waving side to side. |
+| `Point` | 40 | no | Arm extended, index finger pointing. |
+| `ThumbsUp` | 50 | no | Fist with the thumb up, held, then lowered. |
+| `MiddleFinger` | 50 | no | Forearm raised, back of the hand forward, middle finger up. |
+| `Handshake` | 50 | no | Vertical open hand at waist height, pumped three times. |
+| `Talk` | 97 | yes | Conversational gestures with both hands, small nods and torso movement. |
+| `PickUp` | 40 | no | Crouch and reach (14), grab (18), stand holding it (32). |
+| `Interact` | 30 | no | Reach out with the index finger and press (12), e.g. a button. |
 
-**How clips are authored.** Each clip is keyed as local Euler rotations on the suite's own *authoring skeleton* (`authoring_skeleton.py`: 52 bones, facing +Y, arms hanging straight down), on the main body bones only (`animation_library._authored_clips`). `animation_library._expand_pose` fills in the rest of that skeleton from those values: the `Chest` rotation is split 0.35/0.35/0.30 across `Spine`/`Chest`/`UpperChest`; `Shoulder` gets 15% of `UpperArm`'s rotation; `Toe` gets 40% of `Foot`'s (or 15% of `LowerLeg`'s); and the fingers get a fixed relaxed curl into the palm.
+The player preset selects `Idle`, `Run`, `Jump`, `MeleeAttack`, `HarvestSwing`, `Fire` and `Sit`; tick any others in the Animations tab.
+
+**How clips are authored.** Each clip is keyed as local Euler rotations on the suite's own *authoring skeleton* (`authoring_skeleton.py`: 52 bones, facing +Y, arms hanging straight down), on the main body bones only (`animation_library._authored_clips`). `animation_library._expand_pose` fills in the rest of that skeleton from those values: the `Chest` rotation is split 0.35/0.35/0.30 across `Spine`/`Chest`/`UpperChest`; `Shoulder` gets 15% of `UpperArm`'s rotation; `Toe` gets 40% of `Foot`'s (or 15% of `LowerLeg`'s); and any finger a frame doesn't key gets a fixed relaxed curl into the palm.
+
+**Hand shapes.** Clips that key the fingers use named shapes from `animation_library._hand`: `open`, `fist`, `point`, `thumbs_up`, `middle_finger`, `grip` (pistol grip with trigger finger) and `handshake`. Fingers curl into the palm about their local Z axis. The thumb takes full three-axis rotations, because folding it over curled fingers also needs a swing toward the little finger; a Z-only curl leaves it sticking out, so a fist reads as a thumbs-up. These values were picked by rendering candidates from three angles. When a pose needs a bone turned about its own length after bending (the raised hand turned so its back faces forward in `MiddleFinger`, the vertical handshake hand, the cocked arm in `Throw`, the boxing guard), it uses `animation_library._compose`. A plain Euler `r(x, y, z)` turns a bent forearm about the upper arm's axis instead, swinging it sideways.
 
 **How they get onto the character** (`retarget.py`). The authoring skeleton is never exported. For every keyed frame, a temporary authoring armature is posed with the clip. Each authoring bone's rotation relative to its rest pose is taken in world space, turned 180° to the character's facing, and applied to the matching `game_engine` bone, then keyed as a local quaternion. Before that, the character's arm, hand and finger bones are aligned from MPFB's A-pose to the authoring rest pose. The arm is aligned as a chain (the upper arm swings down and the rest follows), which keeps the natural twist so the palms face the thighs. The whole arm also hangs 10° outward (`ARM_ABDUCTION_DEG`), because MPFB's shoulders sit closer to the body than the authoring skeleton's and straight-down arms would pass through the hips. Spine, legs, feet, neck and head keep their own anatomical rest direction. The transfer works in world space, so differences in bone naming and roll between the two rigs don't matter, and it adapts to each character's proportions. No location keys are ever written.
 
 Custom clips saved from the preview editor are stored in the character's own bone space and keyed directly. Custom clips saved by earlier versions (Euler degrees on authoring bone names) are retargeted like the built-ins.
 
-**Prone and Crawl.** `Prone` tips the whole body forward ~80° around the pelvis so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent). Clips are rotation-only, so the pose can't carry the downward offset that would put the body on the ground: for a 1.75 m character the body spans roughly 0.72–1.16 m above the ground. Whatever plays the clip has to lower the character while it's prone: in Blender, move the armature object down; in a game engine, the root transform (and collider). `tests/smoke_test.py` prints the measured range as an `INFO` line. `Crawl`'s limb swing is authored on Y/Z rotations rather than X, because an X-axis stride swing on top of the 80° pitch lifts the limbs off the ground instead of sweeping them along it.
+**Prone, Crawl and Death.** `Prone` tips the whole body forward ~80° around the pelvis so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent). Clips are rotation-only, so the pose can't carry the downward offset that would put the body on the ground: for a 1.75 m character the body spans roughly 0.72–1.16 m above the ground. Whatever plays the clip has to lower the character while it's prone: in Blender, move the armature object down; in a game engine, the root transform (and collider). `tests/smoke_test.py` prints the measured range as an `INFO` line. `Crawl`'s limb swing is authored on Y/Z rotations rather than X, because an X-axis stride swing on top of the 80° pitch lifts the limbs off the ground instead of sweeping them along it. `Death` ends lying on its back, pivoted around the pelvis the same way, so it floats at about the same height and needs the same lowering.
 
 ## Testing
 

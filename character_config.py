@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_VERSION = 2
-BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "ZombieAttack")
+BUILTIN_CLIPS = (
+    "Idle", "Walk", "Run", "Sprint", "StrafeLeft", "StrafeRight", "Jump", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "Sit",
+    "MeleeAttack", "HarvestSwing", "Punch", "Kick", "Throw", "Fire", "PistolIdle", "PistolFire", "Reload", "HitReact", "Death",
+    "Wave", "Point", "ThumbsUp", "MiddleFinger", "Handshake", "Talk", "PickUp", "Interact",
+    "ZombieWalk", "ZombieAttack",
+)
 # Suffix older configs used for the 52-bone versions of the built-in clips
 # (e.g. "IdleExtended"), from when a 16-bone rig also existed. Those
 # versions are now the only ones and use the plain names; validate_config
