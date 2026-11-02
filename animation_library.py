@@ -259,15 +259,32 @@ _HAND_SHAPES = {
     "middle_finger": {"fingers": {"Index": _CURLED, "Middle": _STRAIGHT, "Ring": _CURLED, "Little": _CURLED}, "thumb": _THUMB_TUCKED},
     "grip": {"fingers": {"Index": (25, 25, 15), "Middle": (70, 85, 55), "Ring": (70, 85, 55), "Little": (70, 85, 55)}, "thumb": ((-45, 0, -20), (0, 0, -30), (0, 0, -20))},
     "handshake": {"fingers": {finger: (30, 30, 20) for finger in _FINGERS}, "thumb": ((0, 0, 0), (0, 0, -10), (0, 0, -10))},
+    # V sign: index and middle up and fanned apart, the others held down by the thumb.
+    "peace": {"fingers": {"Index": _STRAIGHT, "Middle": _STRAIGHT, "Ring": _CURLED, "Little": _CURLED}, "thumb": _THUMB_TUCKED,
+              "spread": {"Index": 10, "Middle": -10}},
+    # Thumb and index tips meeting in a ring, the other three up and fanned.
+    # The index/thumb values came from a numeric search on the MPFB character:
+    # of the candidates whose fingertip skin touches (under 1 mm apart), the
+    # one with the least overlap (bone tips furthest apart, 2.5 cm).
+    "ok": {"fingers": {"Index": (50, 60, 40), "Middle": (5, 8, 5), "Ring": (8, 10, 6), "Little": (10, 12, 8)},
+           "thumb": ((-45, 0, -20), (0, 0, -35), (0, 0, -10)), "spread": {"Middle": -3, "Ring": -8, "Little": -14}},
 }
 
 
 def _hand(side: str, shape: str) -> dict[str, tuple[float, float, float]]:
+    """Finger-bone keys for a named hand shape. An optional "spread" (degrees
+    per finger, applied at the knuckle about the finger's local X) fans the
+    fingers apart within the plane of the palm: positive moves a finger
+    toward the thumb side, negative toward the little finger."""
     spec = _HAND_SHAPES[shape]
+    spread = spec.get("spread", {})
     keys = {}
     for finger, curls in spec["fingers"].items():
         for segment, degrees in enumerate(curls, start=1):
-            keys[f"{finger}{segment}.{side}"] = _curl(degrees, side)
+            if segment == 1 and spread.get(finger):
+                keys[f"{finger}{segment}.{side}"] = _compose(("x", spread[finger]), ("z", -degrees if side == "L" else degrees))
+            else:
+                keys[f"{finger}{segment}.{side}"] = _curl(degrees, side)
     for segment, rotation in enumerate(spec["thumb"], start=1):
         keys[f"Thumb{segment}.{side}"] = _side(side, *rotation)
     return keys
@@ -368,6 +385,15 @@ def _more_clips() -> dict[str, dict[str, Any]]:
     # between forearm and wrist) so the back of the hand faces forward.
     middle = {"UpperArm.R": r(50, 0, -10), "Forearm.R": _compose(("x", 100), ("y", 40)), "Hand.R": r(0, 40, 0), **_hand("R", "middle_finger"), "Head": r(-3, 0, -5)}
     clips["MiddleFinger"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: middle, 40: middle, 50: rest}}
+
+    # Raised hand turned about the forearm (split between forearm and wrist):
+    # Peace with the palm toward the viewer, OK with the thumb side toward
+    # the viewer so the ring is seen face-on.
+    def raised(shape, twist):
+        return {"UpperArm.R": r(50, 0, -10), "Forearm.R": _compose(("x", 100), ("y", twist / 2)), "Hand.R": r(0, twist / 2, 0), **_hand("R", shape)}
+    peace, ok = raised("peace", -80), raised("ok", -30)
+    clips["Peace"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: peace, 40: peace, 50: rest}}
+    clips["OKSign"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: ok, 40: ok, 50: rest}}
 
     def shake(forearm):
         # Turned 20 degrees (forearm + wrist) so the hand stands vertical, thumb up.

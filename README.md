@@ -9,7 +9,7 @@ The character itself comes from [MPFB](https://extensions.blender.org/add-ons/mp
 - a textured outfit and shoes, fitted to the body;
 - MPFB's `game_engine` rig: 53 bones, including 3 bones per finger on both hands, with skin weights for the body and every clothing item.
 
-The suite adds the config/preset workflow, colour slots, 33 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
+The suite adds the config/preset workflow, colour slots, 35 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
 
 ## Setup
 
@@ -94,7 +94,7 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 
 ## Animations
 
-33 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
+35 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
 
 | Clip | Frames | Loops | Notes |
 |---|---|---|---|
@@ -129,6 +129,8 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 | `Point` | 40 | no | Arm extended, index finger pointing. |
 | `ThumbsUp` | 50 | no | Fist with the thumb up, held, then lowered. |
 | `MiddleFinger` | 50 | no | Forearm raised, back of the hand forward, middle finger up. |
+| `Peace` | 50 | no | Hand raised, palm forward, index and middle fingers in a V. |
+| `OKSign` | 50 | no | Hand raised, thumb and index tips touching in a ring (seen face-on), other fingers up. |
 | `Handshake` | 50 | no | Vertical open hand at waist height, pumped three times. |
 | `Talk` | 97 | yes | Conversational gestures with both hands, small nods and torso movement. |
 | `PickUp` | 40 | no | Crouch and reach (14), grab (18), stand holding it (32). |
@@ -138,7 +140,7 @@ The player preset selects `Idle`, `Run`, `Jump`, `MeleeAttack`, `HarvestSwing`, 
 
 **How clips are authored.** Each clip is keyed as local Euler rotations on the suite's own *authoring skeleton* (`authoring_skeleton.py`: 52 bones, facing +Y, arms hanging straight down), on the main body bones only (`animation_library._authored_clips`). `animation_library._expand_pose` fills in the rest of that skeleton from those values: the `Chest` rotation is split 0.35/0.35/0.30 across `Spine`/`Chest`/`UpperChest`; `Shoulder` gets 15% of `UpperArm`'s rotation; `Toe` gets 40% of `Foot`'s (or 15% of `LowerLeg`'s); and any finger a frame doesn't key gets a fixed relaxed curl into the palm.
 
-**Hand shapes.** Clips that key the fingers use named shapes from `animation_library._hand`: `open`, `fist`, `point`, `thumbs_up`, `middle_finger`, `grip` (pistol grip with trigger finger) and `handshake`. Fingers curl into the palm about their local Z axis. The thumb takes full three-axis rotations, because folding it over curled fingers also needs a swing toward the little finger; a Z-only curl leaves it sticking out, so a fist reads as a thumbs-up. These values were picked by rendering candidates from three angles. When a pose needs a bone turned about its own length after bending (the raised hand turned so its back faces forward in `MiddleFinger`, the vertical handshake hand, the cocked arm in `Throw`, the boxing guard), it uses `animation_library._compose`. A plain Euler `r(x, y, z)` turns a bent forearm about the upper arm's axis instead, swinging it sideways.
+**Hand shapes.** Clips that key the fingers use named shapes from `animation_library._hand`: `open`, `fist`, `point`, `thumbs_up`, `middle_finger`, `peace`, `ok`, `grip` (pistol grip with trigger finger) and `handshake`. A shape can also fan fingers apart at the knuckle (`spread`). The `ok` thumb and index values were found by a numeric search on the character: of the candidates whose fingertip skin touches, the one with the least overlap. Fingers curl into the palm about their local Z axis. The thumb takes full three-axis rotations, because folding it over curled fingers also needs a swing toward the little finger; a Z-only curl leaves it sticking out, so a fist reads as a thumbs-up. These values were picked by rendering candidates from three angles. When a pose needs a bone turned about its own length after bending (the raised hand turned so its back faces forward in `MiddleFinger`, the vertical handshake hand, the cocked arm in `Throw`, the boxing guard), it uses `animation_library._compose`. A plain Euler `r(x, y, z)` turns a bent forearm about the upper arm's axis instead, swinging it sideways.
 
 **Spine sign convention.** The spine and head bones point up, so −X on `Chest`/`Head` bends forward and +X leans back, the opposite of the arm and leg bones (which point down, so +X swings them forward). An earlier version had this reversed on five clips: `Run` leaned back, `MeleeAttack`, `HarvestSwing` and `ZombieAttack` leaned back on the strike and forward on the wind-up, and `Fire` leaned forward on recoil. Those were fixed after measuring the posed skeleton.
 

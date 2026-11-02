@@ -12,7 +12,7 @@ CONFIG_VERSION = 2
 BUILTIN_CLIPS = (
     "Idle", "Walk", "Run", "Sprint", "StrafeLeft", "StrafeRight", "Jump", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "Sit",
     "MeleeAttack", "HarvestSwing", "Punch", "Kick", "Throw", "Fire", "PistolIdle", "PistolFire", "Reload", "HitReact", "Death",
-    "Wave", "Point", "ThumbsUp", "MiddleFinger", "Handshake", "Talk", "PickUp", "Interact",
+    "Wave", "Point", "ThumbsUp", "MiddleFinger", "Peace", "OKSign", "Handshake", "Talk", "PickUp", "Interact",
     "ZombieWalk", "ZombieAttack",
 )
 # Suffix older configs used for the 52-bone versions of the built-in clips
