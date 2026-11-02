@@ -68,6 +68,9 @@ def default_config() -> dict[str, Any]:
         "output_root": "build",
         "export_preview_glb": True,
         "export_separate_animations": True,
+        # Key a vertical Root offset so the character's lowest point stays on
+        # the floor in every frame (see retarget.ground_clip).
+        "ground_contact": True,
     }
 
 
@@ -112,6 +115,7 @@ def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     config["output_root"] = str(config["output_root"] or "build")
     config["export_preview_glb"] = bool(config["export_preview_glb"])
     config["export_separate_animations"] = bool(config["export_separate_animations"])
+    config["ground_contact"] = bool(config["ground_contact"])
     proportions = raw.get("proportions", {}) if isinstance(raw.get("proportions", {}), dict) else {}
     config["proportions"] = {key: _number(proportions.get(key, value), 0.55, 1.8, value) for key, value in default_config()["proportions"].items()}
     materials = raw.get("materials", {}) if isinstance(raw.get("materials", {}), dict) else {}

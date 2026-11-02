@@ -95,9 +95,16 @@ def _expand_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple
 
 
 def _authored_clips() -> dict[str, dict[str, Any]]:
+    # Sign convention, checked by measuring the posed skeleton: the spine
+    # and head bones point up, so -X on Chest/Head bends forward and +X
+    # leans back (the opposite of the arm and leg bones, which point down,
+    # where +X swings forward). Run, MeleeAttack, HarvestSwing, Fire and
+    # ZombieAttack originally had the Chest sign reversed (Run leaned back,
+    # the attacks leaned back on the strike and forward on the wind-up);
+    # those values were flipped.
     run = {}
     for frame, phase in ((1, 1), (9, 0), (16, -1), (24, 0), (31, 1)):
-        pose = {"Chest": r(6)}
+        pose = {"Chest": r(-6)}  # slight forward lean
         if phase:
             pose.update({"UpperLeg.L": r(42 * phase), "UpperLeg.R": r(-42 * phase), "LowerLeg.L": r(-32 * phase), "LowerLeg.R": r(32 * phase), "UpperArm.L": r(-38 * phase), "UpperArm.R": r(38 * phase)})
         else:
@@ -146,21 +153,21 @@ def _authored_clips() -> dict[str, dict[str, Any]]:
         # involved throughout.
         "MeleeAttack": {"frames": 30, "loop": False, "poses": {
             1: {},
-            8: {"Chest": r(-8, -18), "UpperArm.L": r(-72, 8, 16), "Forearm.L": r(-48, 0, -8), "UpperArm.R": r(-78, -10, -16), "Forearm.R": r(-52, 0, 8)},
-            15: {"Chest": r(18, 22), "UpperArm.L": r(72, -8, 10), "Forearm.L": r(22), "UpperArm.R": r(78, 8, -10), "Forearm.R": r(18)},
-            22: {"Chest": r(6, 5), "UpperArm.L": r(22, 0, 4), "Forearm.L": r(12), "UpperArm.R": r(26, 0, -4), "Forearm.R": r(12)},
+            8: {"Chest": r(8, -18), "UpperArm.L": r(-72, 8, 16), "Forearm.L": r(-48, 0, -8), "UpperArm.R": r(-78, -10, -16), "Forearm.R": r(-52, 0, 8)},
+            15: {"Chest": r(-18, 22), "UpperArm.L": r(72, -8, 10), "Forearm.L": r(22), "UpperArm.R": r(78, 8, -10), "Forearm.R": r(18)},
+            22: {"Chest": r(-6, 5), "UpperArm.L": r(22, 0, 4), "Forearm.L": r(12), "UpperArm.R": r(26, 0, -4), "Forearm.R": r(12)},
             30: {},
         }},
         # A controlled two-handed downward tool stroke. Contact is frame 16
         # (0.5 seconds at 30fps).
         "HarvestSwing": {"frames": 32, "loop": False, "poses": {
             1: {},
-            9: {"Chest": r(-6, -14), "UpperArm.L": r(-58, 12, 20), "Forearm.L": r(-44, 0, -12), "UpperArm.R": r(-72, -12, -18), "Forearm.R": r(-54, 0, 10)},
-            16: {"Chest": r(14, 18), "UpperArm.L": r(58, -10, 14), "Forearm.L": r(18, 0, 4), "UpperArm.R": r(76, 10, -12), "Forearm.R": r(16, 0, -4)},
-            24: {"Chest": r(5, 4), "UpperArm.L": r(18, 0, 5), "Forearm.L": r(10), "UpperArm.R": r(24, 0, -5), "Forearm.R": r(12)},
+            9: {"Chest": r(6, -14), "UpperArm.L": r(-58, 12, 20), "Forearm.L": r(-44, 0, -12), "UpperArm.R": r(-72, -12, -18), "Forearm.R": r(-54, 0, 10)},
+            16: {"Chest": r(-14, 18), "UpperArm.L": r(58, -10, 14), "Forearm.L": r(18, 0, 4), "UpperArm.R": r(76, 10, -12), "Forearm.R": r(16, 0, -4)},
+            24: {"Chest": r(-5, 4), "UpperArm.L": r(18, 0, 5), "Forearm.L": r(10), "UpperArm.R": r(24, 0, -5), "Forearm.R": r(12)},
             32: {},
         }},
-        "Fire": {"frames": 12, "loop": False, "poses": {1: {}, 3: {"UpperArm.R": r(-18), "Forearm.R": r(-12), "Chest": r(-4)}, 12: {}}},
+        "Fire": {"frames": 12, "loop": False, "poses": {1: {}, 3: {"UpperArm.R": r(-18), "Forearm.R": r(-12), "Chest": r(4)}, 12: {}}},
         "Sit": {"frames": 30, "loop": True, "poses": {1: {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "UpperArm.L": r(25), "UpperArm.R": r(25), "Forearm.L": r(55), "Forearm.R": r(55), "Chest": r(8)}, 15: {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "UpperArm.L": r(25), "UpperArm.R": r(25), "Forearm.L": r(55), "Forearm.R": r(55), "Chest": r(9), "Head": r(-1)}, 30: {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "UpperArm.L": r(25), "UpperArm.R": r(25), "Forearm.L": r(55), "Forearm.R": r(55), "Chest": r(8)}}},
         # Held combat crouch: knees bent forward (same sign convention as
         # Sit's hip/knee fold, verified by rendering — the original release
@@ -176,10 +183,9 @@ def _authored_clips() -> dict[str, dict[str, Any]]:
         "CrouchWalkRifle": {"frames": 31, "loop": True, "poses": crouch_walk},
         "Crawl": {"frames": 31, "loop": True, "poses": crawl},
         # Held prone: Hips pitches the whole rig ~horizontal, head counter-
-        # rotated up to look forward. Rotation-only, so this pivots around
-        # the hip bone's rest height rather than lying flat on the ground —
-        # see README "Design boundaries" for what whatever plays it must do
-        # about that before this is usable as an actual prone stance.
+        # rotated up to look forward. The rotations pivot around the hips;
+        # ground contact (retarget.ground_clip) then lowers the character
+        # so it lies on the floor.
         #
         # Sign conventions (checked numerically and by rendering — see
         # tests/smoke_test.py, which asserts the facing direction):
@@ -193,7 +199,7 @@ def _authored_clips() -> dict[str, dict[str, Any]]:
             15: {"Hips": r(-80), "Forearm.L": r(15), "Forearm.R": r(15), "Head": r(54)},
             30: {"Hips": r(-80), "Forearm.L": r(15), "Forearm.R": r(15), "Head": r(55)},
         }},
-        "ZombieAttack": {"frames": 30, "loop": False, "poses": {1: {"Chest": r(10)}, 8: {"Chest": r(-18), "UpperArm.L": r(-55), "UpperArm.R": r(-55), "Forearm.L": r(-35), "Forearm.R": r(-35)}, 15: {"Chest": r(28), "UpperArm.L": r(70), "UpperArm.R": r(70), "Forearm.L": r(20), "Forearm.R": r(20)}, 23: {"Chest": r(8), "UpperArm.L": r(18), "UpperArm.R": r(18)}, 30: {"Chest": r(10)}}},
+        "ZombieAttack": {"frames": 30, "loop": False, "poses": {1: {"Chest": r(-10)}, 8: {"Chest": r(18), "UpperArm.L": r(-55), "UpperArm.R": r(-55), "Forearm.L": r(-35), "Forearm.R": r(-35)}, 15: {"Chest": r(-28), "UpperArm.L": r(70), "UpperArm.R": r(70), "Forearm.L": r(20), "Forearm.R": r(20)}, 23: {"Chest": r(-8), "UpperArm.L": r(18), "UpperArm.R": r(18)}, 30: {"Chest": r(-10)}}},
     }
 
 
@@ -427,8 +433,8 @@ def _more_clips() -> dict[str, dict[str, Any]]:
     clips["HitReact"] = {"frames": 20, "loop": False, "poses": {1: rest, 4: hit, 10: _merge(rest, {"Chest": r(6), "Head": r(4)}), 20: rest}}
 
     # Death: knees buckle, the body tips backwards and ends lying on its
-    # back, arms splayed. Rotation-only like Prone: it pivots around the
-    # hips, so whatever plays it has to lower the character to the ground.
+    # back, arms splayed. Like Prone it pivots around the hips; ground
+    # contact brings the body down onto the floor.
     buckle = {"UpperLeg.L": r(30), "UpperLeg.R": r(25), "LowerLeg.L": r(-60), "LowerLeg.R": r(-55), "Foot.L": r(20), "Foot.R": r(20), "Chest": r(-15), "Head": r(-20),
               "UpperArm.L": r(20, 0, 10), "UpperArm.R": r(15, 0, -10), "Forearm.L": r(30), "Forearm.R": r(25)}
     falling = {"Hips": r(45), "UpperLeg.L": r(40), "UpperLeg.R": r(30), "LowerLeg.L": r(-50), "LowerLeg.R": r(-40), "Chest": r(10), "Head": r(15),

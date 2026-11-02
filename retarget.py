@@ -15,8 +15,11 @@ each keyed frame this module:
    clips assume "rest" looks like; spine, legs, feet, neck and head keep
    their own anatomical rest direction (re-aligning those would distort
    the body's natural curves);
-4. keys the resulting local rotations as quaternions. Rotation only: no
-   location keys are ever written.
+4. keys the resulting local rotations as quaternions.
+
+Bone motion is rotation-only. The one exception is optional ground
+contact (ground_clip): a vertical offset keyed on the rig's Root bone so
+the character's lowest point stays on the floor in every frame.
 
 Because the transfer is done in world space, bone rolls and naming
 conventions of the two rigs don't matter, and the result adapts to each
@@ -33,7 +36,7 @@ import math
 from typing import Any
 
 import bpy
-from mathutils import Matrix, Quaternion
+from mathutils import Matrix, Quaternion, Vector
 
 from authoring_skeleton import authoring_bones
 
@@ -208,10 +211,62 @@ def _key_frames(armature, action, keyed: dict[int, dict[str, Quaternion]]):
     return action
 
 
-def bake_clips(armature, clips: dict[str, dict[str, Any]]) -> dict[str, Any]:
+GROUND_BONE = "Root"
+GROUND_SAMPLE_STEP = 1
+
+
+def _lowest_point(meshes) -> float:
+    """Lowest world-space Z over the evaluated (posed) meshes."""
+    import numpy
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    lowest = math.inf
+    for obj in meshes:
+        evaluated = obj.evaluated_get(depsgraph)
+        mesh = evaluated.to_mesh()
+        count = len(mesh.vertices)
+        if count:
+            coordinates = numpy.empty(count * 3, dtype=numpy.float32)
+            mesh.vertices.foreach_get("co", coordinates)
+            coordinates = coordinates.reshape(count, 3)
+            matrix = numpy.array(obj.matrix_world)
+            z = coordinates @ matrix[2, :3] + matrix[2, 3]
+            lowest = min(lowest, float(z.min()))
+        evaluated.to_mesh_clear()
+    return lowest
+
+
+def ground_clip(armature, action, meshes, keyed_frames) -> None:
+    """Key a vertical offset on the Root bone so the lowest point of the
+    character's meshes (shoes, body, clothes, hair) sits at Z = 0 in every
+    sampled frame: every GROUND_SAMPLE_STEP frames, plus the clip's own
+    keyed frames and its last frame. In-place loops stay in place; poses
+    that pivot around the hips (Prone, Crawl, Death, Crouch, Sit...) come
+    down to the floor instead of hovering."""
+    root = armature.pose.bones.get(GROUND_BONE)
+    if root is None:
+        return
+    scene = bpy.context.scene
+    armature.animation_data.action = action
+    root.location = (0.0, 0.0, 0.0)
+    # World Z -> the Root bone's own (rest) axes, which pose-bone location uses.
+    to_local = (armature.matrix_world.to_3x3() @ root.bone.matrix_local.to_3x3()).inverted()
+    last = int(action.frame_end)
+    frames = sorted(set(range(1, last + 1, GROUND_SAMPLE_STEP)) | {int(frame) for frame in keyed_frames} | {last})
+    offsets = []
+    for frame in frames:
+        scene.frame_set(frame)
+        offsets.append((frame, -_lowest_point(meshes)))
+    for frame, offset in offsets:
+        root.location = to_local @ Vector((0.0, 0.0, offset))
+        root.keyframe_insert(data_path="location", frame=frame, group=GROUND_BONE)
+    root.location = (0.0, 0.0, 0.0)
+
+
+def bake_clips(armature, clips: dict[str, dict[str, Any]], ground_meshes=None) -> dict[str, Any]:
     """Bake several clips onto the character's armature as Actions, one per
     clip, named after it. Authoring-skeleton clips are retargeted; native
-    (game_engine) clips are keyed directly."""
+    (game_engine) clips are keyed directly. With ground_meshes, each clip
+    also gets ground contact (see ground_clip)."""
     actions = {}
     authoring = {name: clip for name, clip in clips.items() if clip.get("skeleton", "authoring") == "authoring"}
     if authoring:
@@ -223,4 +278,7 @@ def bake_clips(armature, clips: dict[str, dict[str, Any]]) -> dict[str, Any]:
         if name not in authoring:
             keyed = {frame: {bone: Quaternion(rotation) for bone, rotation in pose.items()} for frame, pose in clip["poses"].items()}
             actions[name] = _key_frames(armature, _new_action(armature, name, clip["frames"]), keyed)
+    if ground_meshes:
+        for name, action in actions.items():
+            ground_clip(armature, action, ground_meshes, clips[name]["poses"].keys())
     return actions

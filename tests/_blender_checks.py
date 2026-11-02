@@ -25,7 +25,7 @@ if str(ROOT) not in sys.path:
 
 from animation_library import builtin_clips  # noqa: E402
 from character_config import load_config  # noqa: E402
-from retarget import ALIGNED_TARGETS, ARM_ABDUCTION_DEG, BONE_MAP, Retargeter, bake_clips  # noqa: E402
+from retarget import ALIGNED_TARGETS, ARM_ABDUCTION_DEG, BONE_MAP, GROUND_BONE, Retargeter, _lowest_point, bake_clips  # noqa: E402
 from rig_builder import REGION_ATTRIBUTE, action_fcurves, body_height, build_character  # noqa: E402
 
 FBX_TIME_PER_SECOND = 46186158000
@@ -80,8 +80,11 @@ def import_fbx(path: Path):
 
 
 def moving_location_curves() -> list[str]:
+    """Location channels that actually move, other than the Root bone's
+    ground-contact offset (bones themselves only rotate)."""
     return [f"{action.name}:{curve.data_path}" for action in bpy.data.actions for curve in action_fcurves(action)
-            if "location" in curve.data_path and len({round(point.co.y, 5) for point in curve.keyframe_points}) > 1]
+            if "location" in curve.data_path and f'"{GROUND_BONE}"' not in curve.data_path
+            and len({round(point.co.y, 5) for point in curve.keyframe_points}) > 1]
 
 
 def glb_summary(path: Path) -> dict:
@@ -126,7 +129,7 @@ def check_outputs(config_path: Path, output_dir: Path) -> None:
     character = config["character_id"]
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
 
-    listed = [manifest["blend"], manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(),
+    listed = [manifest["blend"], manifest["thumbnail"], manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(),
               *manifest["textures"].values(), *manifest["baked_textures"].values()]
     missing = [path for path in listed if path and not Path(path).is_file()]
     check(f"{character}: manifest files exist", not missing, f"missing {missing}")
@@ -153,7 +156,10 @@ def check_outputs(config_path: Path, output_dir: Path) -> None:
     active = armature.animation_data.action.name if armature and armature.animation_data and armature.animation_data.action else None
     check(f"{character}: .blend opens with the first clip assigned", active == config["clips"][0], f"active {active}")
     moving = moving_location_curves()
-    check(f"{character}: .blend Actions are rotation-only", not moving, f"{moving[:5]}")
+    check(f"{character}: .blend Actions only rotate bones (plus the Root ground offset)", not moving, f"{moving[:5]}")
+    if config["ground_contact"]:
+        grounded = all(any(curve.data_path == f'pose.bones["{GROUND_BONE}"].location' for curve in action_fcurves(action)) for action in actions.values())
+        check(f"{character}: every Action has a Root ground-contact channel", grounded, "missing on some actions")
     textures = [image for image in bpy.data.images if image.filepath]
     check(f"{character}: .blend textures are packed", bool(textures) and all(image.packed_file for image in textures),
           f"{[(image.name, bool(image.packed_file)) for image in textures]}")
@@ -193,7 +199,7 @@ def check_outputs(config_path: Path, output_dir: Path) -> None:
     check(f"{character}: combined FBX has {EXPECTED_BONES} bones and {len(meshes)} meshes", bone_count == EXPECTED_BONES and len(fbx_meshes) == len(meshes),
           f"bones {bone_count}, meshes {len(fbx_meshes)}")
     moving = moving_location_curves()
-    check(f"{character}: combined FBX is rotation-only", not moving, f"{moving[:5]}")
+    check(f"{character}: combined FBX only rotates bones (plus the Root ground offset)", not moving, f"{moving[:5]}")
     embedded = [image for image in bpy.data.images if image.packed_file or image.has_data]
     check(f"{character}: combined FBX embeds a base-colour texture per material", len(embedded) >= len(manifest["baked_textures"]),
           f"{len(embedded)} images for {len(manifest['baked_textures'])} materials")
@@ -224,7 +230,7 @@ def check_outputs(config_path: Path, output_dir: Path) -> None:
                 bad_contents.append(f"{clip}: {len(armatures[0].data.bones)} bones")
             elif moving_location_curves():
                 bad_contents.append(f"{clip}: moving location curves")
-        check(f"{character}: per-clip FBX are skeleton-only, {EXPECTED_BONES} bones, rotation-only", not bad_contents, "; ".join(bad_contents[:5]))
+        check(f"{character}: per-clip FBX are skeleton-only, {EXPECTED_BONES} bones, bones only rotate", not bad_contents, "; ".join(bad_contents[:5]))
 
     # GLB: skinned, textured, and carrying the modifier-applied geometry
     # (glTF can split vertices but never merges them).
@@ -258,7 +264,7 @@ def check_poses(config_path: Path) -> None:
     reset()
     config = load_config(config_path)
     armature, meshes, _bones = build_character(config)
-    actions = bake_clips(armature, clips)
+    actions = bake_clips(armature, clips, ground_meshes=meshes)
     body = next(obj for obj in meshes if obj.name.endswith(".body"))
 
     for clip_name in ("Idle", "Prone", "Crawl"):
@@ -278,6 +284,21 @@ def check_poses(config_path: Path) -> None:
         evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
         heights = [(body.matrix_world @ vertex.co).z for vertex in evaluated.vertices]
         print(f"INFO {clip_name} frame 1 body height range: {min(heights):.2f}..{max(heights):.2f} m (target_height_m {config['target_height_m']})")
+
+    # Ground contact: on every frame, the character's lowest point is on the
+    # floor, including poses that pivot around the hips; and the Root offset
+    # only ever moves the character vertically.
+    root = armature.pose.bones[GROUND_BONE]
+    for clip_name in ("Idle", "Walk", "Sprint", "Prone", "Crawl", "Death", "Crouch", "Sit", "PickUp", "Kick"):
+        armature.animation_data.action = actions[clip_name]
+        worst, sideways = 0.0, 0.0
+        for frame in range(1, int(actions[clip_name].frame_end) + 1):
+            bpy.context.scene.frame_set(frame)
+            worst = max(worst, abs(_lowest_point(meshes)))
+            offset = armature.matrix_world.to_3x3() @ root.bone.matrix_local.to_3x3() @ root.location
+            sideways = max(sideways, abs(offset.x), abs(offset.y))
+        check(f"ground contact: {clip_name} stays on the floor every frame, Root moves only vertically", worst <= 0.005 and sideways <= 1e-4,
+              f"lowest point off the floor by up to {worst * 100:.1f} cm, sideways offset {sideways:.5f}")
 
     # Retarget accuracy: on every keyed frame of every clip, each arm, hand
     # and finger bone must point where the authoring bone points (turned to

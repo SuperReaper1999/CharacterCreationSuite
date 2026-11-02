@@ -29,12 +29,12 @@ The suite adds the config/preset workflow, colour slots, 33 built-in animations 
 
 ## The app
 
-- **Character tab:** ID, display name, target height, and the MPFB assets to use: **Skin**, **Hair**, **Outfit**, **Shoes**. The lists are read from MPFB's asset folder in your Blender config; the fields are editable if it isn't found. The live preview on the right is a fast silhouette guide only; the `.blend` is the real result.
+- **Character tab:** ID, display name, target height, and the MPFB assets to use: **Skin**, **Hair**, **Outfit**, **Shoes**. The lists are read from MPFB's asset folder in your Blender config; the fields are editable if it isn't found. The preview on the right is a real render of the character in its Idle pose. **Render preview** builds and renders just that (about 15–30 seconds, no exports), and every **Generate character** refreshes it too. When you change anything that affects the look (height, body, assets, proportions, colours), the preview is marked *out of date* until you render again. Images are saved as `build/<character-id>/<character-id>_Thumbnail.png`.
 - **Proportions tab:** shoulder width, torso length, arm length, leg length, head size, body width (ratios, 1.0 = neutral), plus the MakeHuman body sliders gender (0 female – 1 male), age (0.5 = 25 years), muscle and weight.
 - **Materials tab:** the colour slots (see below).
 - **Animations tab:** pick clips to include. Each clip has a **View anim in Blender** button that opens an interactive Blender window on the character as currently configured, with that clip looping. It builds the character with the exact same code as the export, and only writes a scratch `build/_preview/character_config.json`.
 
-The preview window is also an editor. Enter Pose Mode, adjust the bones, insert keyframes as usual (`I` with all bones selected keys the whole pose), then use the **Character Suite** panel in the 3D viewport's side tab (`N`) to name it and hit **Save as Preset Animation**. That samples every frame that has a keyframe and writes `presets/animations/<name>.json`, storing each bone's local rotation on the character's own rig as a quaternion. Reusing a built-in clip's name overrides it (you'll get a warning). Saving is rejected if the action has any location/scale keys, so clips stay rotation-only. Back in the suite, click **Refresh clip list** to pick it up.
+The preview window is also an editor. Enter Pose Mode, adjust the bones, insert keyframes as usual (`I` with all bones selected keys the whole pose), then use the **Character Suite** panel in the 3D viewport's side tab (`N`) to name it and hit **Save as Preset Animation**. That samples every frame that has a keyframe and writes `presets/animations/<name>.json`, storing each bone's local rotation on the character's own rig as a quaternion. Reusing a built-in clip's name overrides it (you'll get a warning). Saving is rejected if the action has any location/scale keys, apart from the automatic `Root` ground offset, which is left out of the saved clip. Back in the suite, click **Refresh clip list** to pick it up.
 
 ## Config
 
@@ -66,13 +66,14 @@ Everything goes to `build/<character-id>/`:
 - `<character-id>_Preview.glb` — bind-pose preview with no animation, textured, exported with modifiers applied.
 - `Textures/` — the original asset textures (diffuse, normal, AO, …) that the `.blend` materials use, plus `<material>_basecolor.png`: each material's final colour (tints and recolours included), baked with Cycles. The FBX and GLB use the baked ones, because FBX can't carry shader node setups. Body skin hidden under clothing is masked out of the exported mesh, so those areas of the skin bake are left black.
 - `character_config.json` — reproducible build configuration.
-- `manifest.json` — asset contract: paths of everything above, bone names, clips.
+- `<character-id>_Thumbnail.png` (+ `.json`) — the app's preview render (first clip, first frame), and the config it was rendered from.
+- `manifest.json` — asset contract: paths of everything above, bone names, clips, whether ground contact was on.
 
 The model and per-clip animation FBX files are on by default (`export_separate_animations`); set it to `false` to only produce the combined FBX. A build takes about 30 seconds plus a few seconds per clip on a typical CPU, most of it baking the export textures.
 
 ## Animations
 
-33 built-in clips, all rotation-only. Gestures and one-handed actions use the right hand.
+33 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
 
 | Clip | Frames | Loops | Notes |
 |---|---|---|---|
@@ -118,21 +119,26 @@ The player preset selects `Idle`, `Run`, `Jump`, `MeleeAttack`, `HarvestSwing`, 
 
 **Hand shapes.** Clips that key the fingers use named shapes from `animation_library._hand`: `open`, `fist`, `point`, `thumbs_up`, `middle_finger`, `grip` (pistol grip with trigger finger) and `handshake`. Fingers curl into the palm about their local Z axis. The thumb takes full three-axis rotations, because folding it over curled fingers also needs a swing toward the little finger; a Z-only curl leaves it sticking out, so a fist reads as a thumbs-up. These values were picked by rendering candidates from three angles. When a pose needs a bone turned about its own length after bending (the raised hand turned so its back faces forward in `MiddleFinger`, the vertical handshake hand, the cocked arm in `Throw`, the boxing guard), it uses `animation_library._compose`. A plain Euler `r(x, y, z)` turns a bent forearm about the upper arm's axis instead, swinging it sideways.
 
+**Spine sign convention.** The spine and head bones point up, so −X on `Chest`/`Head` bends forward and +X leans back, the opposite of the arm and leg bones (which point down, so +X swings them forward). An earlier version had this reversed on five clips: `Run` leaned back, `MeleeAttack`, `HarvestSwing` and `ZombieAttack` leaned back on the strike and forward on the wind-up, and `Fire` leaned forward on recoil. Those were fixed after measuring the posed skeleton.
+
 **How they get onto the character** (`retarget.py`). The authoring skeleton is never exported. For every keyed frame, a temporary authoring armature is posed with the clip. Each authoring bone's rotation relative to its rest pose is taken in world space, turned 180° to the character's facing, and applied to the matching `game_engine` bone, then keyed as a local quaternion. Before that, the character's arm, hand and finger bones are aligned from MPFB's A-pose to the authoring rest pose. The arm is aligned as a chain (the upper arm swings down and the rest follows), which keeps the natural twist so the palms face the thighs. The whole arm also hangs 10° outward (`ARM_ABDUCTION_DEG`), because MPFB's shoulders sit closer to the body than the authoring skeleton's and straight-down arms would pass through the hips. Spine, legs, feet, neck and head keep their own anatomical rest direction. The transfer works in world space, so differences in bone naming and roll between the two rigs don't matter, and it adapts to each character's proportions. No location keys are ever written.
 
 Custom clips saved from the preview editor are stored in the character's own bone space and keyed directly. Custom clips saved by earlier versions (Euler degrees on authoring bone names) are retargeted like the built-ins.
 
-**Prone, Crawl and Death.** `Prone` tips the whole body forward ~80° around the pelvis so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent). Clips are rotation-only, so the pose can't carry the downward offset that would put the body on the ground: for a 1.75 m character the body spans roughly 0.72–1.16 m above the ground. Whatever plays the clip has to lower the character while it's prone: in Blender, move the armature object down; in a game engine, the root transform (and collider). `tests/smoke_test.py` prints the measured range as an `INFO` line. `Crawl`'s limb swing is authored on Y/Z rotations rather than X, because an X-axis stride swing on top of the 80° pitch lifts the limbs off the ground instead of sweeping them along it. `Death` ends lying on its back, pivoted around the pelvis the same way, so it floats at about the same height and needs the same lowering.
+**Ground contact.** Bones only rotate, so poses that pivot around the hips (`Prone`, `Crawl`, `Death`, `Crouch`, `Sit`, `PickUp`, `Kick`…) would hover above the floor. So after each clip is baked, the build steps through every frame, finds the lowest point of the character's meshes (shoes, body, clothes, hair), and keys a vertical offset on the rig's `Root` bone so that point sits exactly at Z = 0 (`retarget.ground_clip`). In-place loops like `Walk` and `Run` stay in place and pick up a natural bob; nothing moves the character forward, and `Jump` has no airtime. This is the only location channel any clip has. Set `ground_contact` to `false` in the config to switch it off, and the clips are then purely rotations again. The preview editor doesn't save the `Root` channel; it's recomputed for each character.
+
+**Prone, Crawl and Death.** `Prone` tips the whole body forward ~80° around the pelvis so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent); ground contact then brings it down onto its toes and hands. `Crawl`'s limb swing is authored on Y/Z rotations rather than X, because an X-axis stride swing on top of the 80° pitch lifts the limbs off the ground instead of sweeping them along it. `Death` ends lying flat on its back.
 
 ## Testing
 
 `tests/smoke_test.py` is a headless end-to-end check, and needs MPFB installed in the Blender it uses. It builds both presets plus an "every clip" character, each through the real `blender_build.py` in a fresh Blender process (the same path as **Generate character**), then checks:
 
-- the `.blend`: one armature with 53 bones including all 30 finger bones; body, eyes, eyebrows, eyelashes, hair, outfit and shoes, all rigged; one fake-user Action per clip, rotation-only, the first one assigned; packed textures; body height within 1% of `target_height_m`;
+- the `.blend`: one armature with 53 bones including all 30 finger bones; body, eyes, eyebrows, eyelashes, hair, outfit and shoes, all rigged; one fake-user Action per clip, the first one assigned, bones only rotating (plus the `Root` ground offset); packed textures; body height within 1% of `target_height_m`;
 - that every colour slot with alpha 1 shows up in the baked texture over its region;
-- the FBX files: 53 bones, all meshes, embedded textures, takes named after clips with matching frame ranges, rotation-only;
+- the FBX files: 53 bones, all meshes, embedded textures, takes named after clips with matching frame ranges, no location channels other than the `Root` ground offset;
 - the GLB: skinned with 53 joints, textured, with the modifier-applied geometry;
 - `Prone`/`Crawl` face the ground with naturally bent elbows, and `Idle` faces forward;
+- ground contact: on every frame of `Idle`, `Walk`, `Sprint`, `Prone`, `Crawl`, `Death`, `Crouch`, `Sit`, `PickUp` and `Kick`, the lowest point is within 5 mm of the floor, and the `Root` offset only moves vertically;
 - retarget accuracy: on every keyed frame of every clip, every arm, hand and finger bone points where the authored clip says, within the 10° outward tilt.
 
 ```
@@ -146,7 +152,7 @@ It writes only to a temporary folder (`--keep` keeps it), exits non-zero if any 
 ## Design boundaries and known limitations
 
 - One rig: MPFB `game_engine` (53 bones). Body shape, height, assets, colours and clip selection are configurable.
-- Every clip has rotation-only bone keys; root motion is never authored (see Prone above).
+- Bones only rotate. The only location channel is the automatic vertical `Root` ground offset (`ground_contact`); there's no forward root motion.
 - Animation events/markers for game engines are not generated.
 - The top/bottom colour split is a height heuristic per UV island (see Colour slots).
 - In the FBX/GLB, colours come from the baked textures: a snapshot taken at build time. In the `.blend` they are live shader nodes.

@@ -9,7 +9,7 @@ inspects the outputs from inside Blender (tests/_blender_checks.py):
 - the .blend (primary output): one armature with 53 bones including all 30
   finger bones; body, eyes, eyebrows, eyelashes, hair, outfit and shoes,
   all parented to and deformed by it; one fake-user Action per clip
-  (rotation-only), the first clip assigned; packed textures; body height
+  (bones only rotate, plus a Root ground offset), the first clip assigned; packed textures; body height
   equal to target_height_m (within 1%);
 - colour slots with alpha 1 show up in the baked export textures;
 - 53 bones in the combined, model and per-clip FBX; the combined FBX
@@ -19,6 +19,7 @@ inspects the outputs from inside Blender (tests/_blender_checks.py):
 - the GLB preview is skinned, textured and carries the modifier-applied
   geometry;
 - Prone/Crawl lie face-down with natural elbow bend; Idle faces forward;
+- ground contact: the lowest point stays on the floor every frame;
 - retarget accuracy: every arm, hand and finger bone follows the authored
   clips on every keyed frame.
 

@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 from animation_library import clips
 from character_config import BUILTIN_CLIPS, load_config, safe_id
 from custom_clips import save_custom_clip
-from retarget import bake_clips
+from retarget import GROUND_BONE, bake_clips
 from rig_builder import action_fcurves, build_character
 
 
@@ -56,8 +56,11 @@ class CCS_OT_save_preset(bpy.types.Operator):
             return {"CANCELLED"}
 
         rotation_paths = ("rotation_quaternion", "rotation_euler", "rotation_axis_angle")
+        # The Root location channel is the automatic ground-contact offset;
+        # it isn't saved (builds recompute it for each character).
+        ground_path = f'pose.bones["{GROUND_BONE}"].location'
         rotation_curves = [c for c in action_fcurves(action) if c.data_path.endswith(rotation_paths)]
-        bad_curves = [c.data_path for c in action_fcurves(action) if not c.data_path.endswith(rotation_paths)]
+        bad_curves = [c.data_path for c in action_fcurves(action) if not c.data_path.endswith(rotation_paths) and c.data_path != ground_path]
         if bad_curves:
             self.report({"ERROR"}, f"Only bone rotation can be saved (rotation-only rig contract). Remove keys on: {', '.join(sorted(set(bad_curves)))}")
             return {"CANCELLED"}
@@ -138,7 +141,7 @@ def preview(config_path: Path, clip_name: str) -> None:
     register()
 
     armature, meshes, _bones = build_character(config)
-    bake_clips(armature, {clip_name: clip})
+    bake_clips(armature, {clip_name: clip}, ground_meshes=meshes if config["ground_contact"] else None)
 
     scene = bpy.context.scene
     scene.frame_start = 1
