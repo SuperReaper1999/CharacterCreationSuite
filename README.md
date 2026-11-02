@@ -25,7 +25,28 @@ The suite adds the config/preset workflow, colour slots, 33 built-in animations 
    - MPFB: <https://extensions.blender.org/add-ons/mpfb/> — GPL-3.0-or-later, by Joel Palmius and the MakeHuman team. It is installed into your Blender, not included in this repository.
    - MakeHuman system assets: <https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html> — CC0 (skins, eyes, eyebrows, eyelashes, hair, clothes, shoes).
 
-3. Double-click `Run Character Creation Suite.bat` (or run `python character_suite.py`; Blender must be on PATH or in its default install folder), load `presets/player.json` or `presets/zombie.json`, customise it, then select **Generate character**.
+3. Start the app:
+   - **Windows:** double-click `Run Character Creation Suite.bat`.
+   - **Linux / macOS:** run `./run_character_suite.sh`. It checks that Python has tkinter (and prints the install command for your distro if not) and reports which Blender it found.
+   - Or run `python character_suite.py` directly.
+
+   Then load `presets/player.json` or `presets/zombie.json`, customise it, then select **Generate character**.
+
+### Finding Blender
+
+The app and the test runner look for Blender in this order (`blender_locator.py`):
+
+1. the `CCS_BLENDER` environment variable, if set (path to the Blender executable);
+2. `blender` on your PATH (official tarball added to PATH, a distro package, Snap);
+3. standard install folders, newest version first: Windows `Program Files\Blender Foundation\Blender*`; Linux `/opt/blender*`, `~/blender*`, `~/Applications/blender*`, `~/.local/opt/blender*`, `~/.local/share/blender*`, `/snap/bin/blender`; macOS `/Applications/Blender*.app`;
+4. Flatpak (`org.blender.Blender`), on Linux.
+
+The Build tab shows which Blender and which MPFB asset folder were found when the app starts. You can also check from a terminal with `python3 blender_locator.py`.
+
+**Linux notes.**
+- tkinter is a separate package on many distros: `sudo apt install python3-tk` (Debian/Ubuntu/Mint), `sudo dnf install python3-tkinter` (Fedora), `sudo pacman -S tk` (Arch), `sudo zypper install python3-tk` (openSUSE).
+- With the Flatpak, run the one-time setup as `flatpak run org.blender.Blender --background --python setup_mpfb.py`. If Blender can't read or write the suite's folder from inside its sandbox, grant access with `flatpak override --user --filesystem=/path/to/CharacterCreationSuite org.blender.Blender`. The app reads MPFB's asset list from the Flatpak's own config folder (`~/.var/app/org.blender.Blender/config/blender`).
+- The app's UI font is the first one installed out of Segoe UI, Noto Sans, DejaVu Sans, Cantarell, Ubuntu, Liberation Sans, Helvetica and Arial; if none are, it uses Tk's default.
 
 ## The app
 

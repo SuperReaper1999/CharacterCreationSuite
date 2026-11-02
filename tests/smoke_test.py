@@ -29,7 +29,7 @@ Needs MPFB and the MakeHuman system assets installed in the Blender used
 All output goes to a temporary folder; nothing is written under build/.
 
 Usage (either a Blender executable, or a Python with `pip install bpy`):
-    python tests/smoke_test.py                       # finds blender on PATH / default install paths
+    python tests/smoke_test.py                       # finds Blender like the app does (PATH, install folders, Flatpak)
     python tests/smoke_test.py --blender "C:\\Program Files\\Blender Foundation\\Blender 5.0\\blender.exe"
     python tests/smoke_test.py --bpy-python path/to/python-with-bpy
 
@@ -49,32 +49,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from blender_locator import find_blender  # noqa: E402
 from character_config import load_config, save_config, supported_clips  # noqa: E402
 
 CHECKS_SCRIPT = ROOT / "tests" / "_blender_checks.py"
 BUILD_SCRIPT = ROOT / "blender_build.py"
 
-# Same search order as character_suite.find_blender(); duplicated here so
-# the test doesn't import the tkinter GUI module.
-DEFAULT_BLENDER_PATHS = (
-    Path(r"D:\Program Files\Blender Foundation\Blender 5.0\blender.exe"),
-    Path(r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"),
-    Path(r"C:\Program Files\Blender Foundation\Blender\blender.exe"),
-)
-
-
-def find_blender() -> str | None:
-    return shutil.which("blender") or next((str(path) for path in DEFAULT_BLENDER_PATHS if path.exists()), None)
-
-
 def make_runner(args: argparse.Namespace):
     if args.bpy_python:
         return lambda script, script_args: [args.bpy_python, str(script), "--", *script_args]
-    blender = args.blender or find_blender()
+    blender = [args.blender] if args.blender else find_blender()
     if not blender:
-        raise SystemExit("Blender not found. Pass --blender PATH, or --bpy-python PATH for a Python with the bpy module.")
+        raise SystemExit("Blender not found (searched PATH, standard install folders, Flatpak). Pass --blender PATH, "
+                         "set CCS_BLENDER, or pass --bpy-python PATH for a Python with the bpy module.")
+    print(f"Using Blender: {' '.join(blender)}")
     # No --factory-startup: MPFB is an extension installed in the user's prefs.
-    return lambda script, script_args: [blender, "--background", "--python", str(script), "--", *script_args]
+    return lambda script, script_args: [*blender, "--background", "--python", str(script), "--", *script_args]
 
 
 def run(command: list[str]) -> subprocess.CompletedProcess:

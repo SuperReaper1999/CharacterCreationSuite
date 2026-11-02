@@ -1,4 +1,4 @@
-"""Desktop UI for building configurable rigged characters in Blender."""
+"""Desktop UI for building configurable rigged characters in Blender (Windows, Linux, macOS)."""
 
 from __future__ import annotations
 
@@ -11,31 +11,12 @@ import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import font as tkfont
 
+from blender_locator import describe, find_blender, mpfb_data_dirs
 from character_config import BUILTIN_CLIPS, default_config, load_config, safe_id, save_config, supported_clips, validate_config
 
 ROOT = Path(__file__).resolve().parent
-
-
-def find_blender() -> str | None:
-    return shutil.which("blender") or next((str(path) for path in (
-        Path(r"D:\Program Files\Blender Foundation\Blender 5.0\blender.exe"), Path(r"C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"), Path(r"C:\Program Files\Blender Foundation\Blender\blender.exe"),
-    ) if path.exists()), None)
-
-
-def mpfb_data_dirs() -> list[Path]:
-    """MPFB user data folders (data/skins, data/clothes, ...) in this user's
-    Blender config, newest Blender version first. Searched on disk because
-    the GUI runs outside Blender."""
-    bases = []
-    if os.name == "nt":
-        bases.append(Path(os.environ.get("APPDATA", "")) / "Blender Foundation" / "Blender")
-    elif sys.platform == "darwin":
-        bases.append(Path.home() / "Library" / "Application Support" / "Blender")
-    else:
-        bases.append(Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "blender")
-    found = [path for base in bases if base.is_dir() for path in base.glob("*/extensions/.user/*/mpfb/data") if path.is_dir()]
-    return sorted(found, key=lambda path: path.parts[-6], reverse=True)
 
 
 def mpfb_asset_names(subdir: str, startswith: str = "") -> list[str]:
@@ -47,9 +28,25 @@ def mpfb_asset_names(subdir: str, startswith: str = "") -> list[str]:
     return []
 
 
+BLENDER_NOT_FOUND = ("Blender wasn't found. Install Blender 5.0+ and put 'blender' on your PATH, "
+                     "or set the CCS_BLENDER environment variable to the Blender executable. "
+                     "(Searched: PATH, standard install folders, and Flatpak org.blender.Blender.)")
 # Settings that change how the character looks; the preview is marked out of
 # date when any of these differ from what the thumbnail was rendered with.
 APPEARANCE_KEYS = ("character_id", "target_height_m", "body", "skin", "hair", "outfit", "shoes", "proportions", "materials", "ground_contact")
+
+
+# First installed family wins: Segoe UI on Windows, common Linux/macOS sans
+# fonts otherwise, then Tk's own default.
+UI_FONTS = ("Segoe UI", "Noto Sans", "DejaVu Sans", "Cantarell", "Ubuntu", "Liberation Sans", "Helvetica Neue", "Helvetica", "Arial")
+
+
+def pick_ui_font(root) -> str:
+    try:
+        installed = set(tkfont.families(root))
+    except tk.TclError:
+        installed = set()
+    return next((family for family in UI_FONTS if family in installed), "TkDefaultFont")
 
 
 class CharacterSuite:
@@ -58,7 +55,10 @@ class CharacterSuite:
         self.vars: dict[str, tk.Variable] = {}; self.proportions: dict[str, tk.StringVar] = {}; self.colors: dict[str, list[tk.StringVar]] = {}; self.clip_vars: dict[str, tk.BooleanVar] = {}
         self.color_swatches: dict[str, tk.Label] = {}
         self.status = tk.StringVar(value="Ready. Load a preset or adjust the character.")
+        self.ui_font = pick_ui_font(root)
         self._build(); self._watch_preview(); self.load_state(default_config())
+        data = mpfb_data_dirs()
+        self._write_log(f"Blender: {describe(find_blender())}\nMPFB assets: {data[0] if data else 'not found (run setup_mpfb.py, see README)'}\n")
 
     def _field(self, parent: ttk.Frame, row: int, column: int, label: str, key: str, width: int = 12) -> None:
         ttk.Label(parent, text=label).grid(row=row, column=column, sticky="w", padx=(0, 4), pady=3)
@@ -186,23 +186,23 @@ class CharacterSuite:
                 stale = True
             if stale and not self._rendering:
                 canvas.create_rectangle(0, 0, width, 30, fill="#3d2f12", outline="")
-                canvas.create_text(width / 2, 15, text="Out of date — click Render preview", fill="#f2cc60", font=("Segoe UI", 10, "bold"))
+                canvas.create_text(width / 2, 15, text="Out of date — click Render preview", fill="#f2cc60", font=(self.ui_font, 10, "bold"))
         elif not self._rendering:
-            canvas.create_text(width / 2, height / 2, text="No preview yet.\n\nClick Render preview (about 15–30 s),\nor Generate character.", fill="#8b98a9", font=("Segoe UI", 11), justify="center")
+            canvas.create_text(width / 2, height / 2, text="No preview yet.\n\nClick Render preview (about 15–30 s),\nor Generate character.", fill="#8b98a9", font=(self.ui_font, 11), justify="center")
         if self._rendering:
             canvas.create_rectangle(0, height - 30, width, height, fill="#12304d", outline="")
-            canvas.create_text(width / 2, height - 15, text="Rendering in Blender…", fill="#9fd0ff", font=("Segoe UI", 10, "bold"))
+            canvas.create_text(width / 2, height - 15, text="Rendering in Blender…", fill="#9fd0ff", font=(self.ui_font, 10, "bold"))
 
     def render_preview(self) -> None:
         if self._rendering:
             return
         blender = find_blender()
-        if not blender: messagebox.showerror("Character Creation Suite", "Blender 5.0 was not found. Install Blender or add it to PATH."); return
+        if not blender: messagebox.showerror("Character Creation Suite", BLENDER_NOT_FOUND); return
         config = self.state()
         config_path = ROOT / config["output_root"] / "_preview" / f"{config['character_id']}_thumbnail_config.json"; save_config(config_path, config)
         self._rendering = True; self.preview_button.state(["disabled"]); self.status.set("Rendering preview in headless Blender…"); self.draw_preview()
         def worker():
-            command = [blender, "--background", "--python", str(ROOT / "blender_build.py"), "--", str(config_path), "--thumbnail-only"]
+            command = [*blender, "--background", "--python", str(ROOT / "blender_build.py"), "--", str(config_path), "--thumbnail-only"]
             result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
             self.root.after(0, lambda: self._finish_preview(result))
         threading.Thread(target=worker, daemon=True).start()
@@ -224,7 +224,7 @@ class CharacterSuite:
         for clip in supported_clips():
             if clip not in BUILTIN_CLIPS and not custom_label_shown:
                 custom_label_shown = True
-                ttk.Label(self.clip_rows_frame, text="Custom presets (presets/animations/)", font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(10, 2))
+                ttk.Label(self.clip_rows_frame, text="Custom presets (presets/animations/)", font=(self.ui_font, 9, "bold")).pack(anchor="w", pady=(10, 2))
             var = tk.BooleanVar(value=clip in previously_checked); self.clip_vars[clip] = var
             row = ttk.Frame(self.clip_rows_frame); row.pack(fill="x", pady=3)
             ttk.Checkbutton(row, text=clip, variable=var).pack(side="left")
@@ -262,20 +262,20 @@ class CharacterSuite:
 
     def preview_clip(self, clip_name: str) -> None:
         blender = find_blender()
-        if not blender: messagebox.showerror("Character Creation Suite", "Blender 5.0 was not found. Install Blender or add it to PATH."); return
+        if not blender: messagebox.showerror("Character Creation Suite", BLENDER_NOT_FOUND); return
         config = self.state()
         config_path = ROOT / config["output_root"] / "_preview" / "character_config.json"; save_config(config_path, config)
         self.status.set(f"Opening {clip_name} preview in Blender…")
-        command = [blender, "--python", str(ROOT / "blender_preview.py"), "--", str(config_path), clip_name]
+        command = [*blender, "--python", str(ROOT / "blender_preview.py"), "--", str(config_path), clip_name]
         subprocess.Popen(command, cwd=ROOT)
 
     def generate(self) -> None:
         config = self.state(); blender = find_blender()
-        if not blender: messagebox.showerror("Character Creation Suite", "Blender 5.0 was not found. Install Blender or add it to PATH."); return
+        if not blender: messagebox.showerror("Character Creation Suite", BLENDER_NOT_FOUND); return
         config_path = ROOT / config["output_root"] / safe_id(config["character_id"]) / "character_config.json"; save_config(config_path, config)
         self.status.set("Generating in headless Blender…"); self._write_log(f"\n> {config['character_id']}\n")
         def worker():
-            command = [blender, "--background", "--python", str(ROOT / "blender_build.py"), "--", str(config_path)]
+            command = [*blender, "--background", "--python", str(ROOT / "blender_build.py"), "--", str(config_path)]
             result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
             self.root.after(0, lambda: self._finish_generation(result, config_path))
         threading.Thread(target=worker, daemon=True).start()
