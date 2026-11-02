@@ -11,7 +11,6 @@ Run only through Blender, WITHOUT --background:
 
 from __future__ import annotations
 
-import math
 import sys
 from pathlib import Path
 
@@ -24,7 +23,8 @@ if str(ROOT) not in sys.path:
 from animation_library import clips
 from character_config import BUILTIN_CLIPS, load_config, safe_id
 from custom_clips import save_custom_clip
-from rig_builder import action_fcurves, bake_pose_action, build_character
+from retarget import bake_clips
+from rig_builder import action_fcurves, build_character
 
 
 def after_double_dash() -> list[str]:
@@ -37,8 +37,8 @@ def find_armature():
 
 class CCS_OT_save_preset(bpy.types.Operator):
     """Sample the current action's keyframes and save them as a reusable
-    preset animation JSON under presets/animations/, in the same
-    rotation-only format as the built-in clips."""
+    preset animation JSON under presets/animations/: rotation-only, as
+    local quaternions on the character's own rig bones."""
     bl_idname = "ccs.save_preset"
     bl_label = "Save as Preset Animation"
 
@@ -55,8 +55,9 @@ class CCS_OT_save_preset(bpy.types.Operator):
             self.report({"ERROR"}, "No action on the armature to save.")
             return {"CANCELLED"}
 
-        rotation_curves = [c for c in action_fcurves(action) if c.data_path.endswith("rotation_euler")]
-        bad_curves = [c.data_path for c in action_fcurves(action) if not c.data_path.endswith("rotation_euler")]
+        rotation_paths = ("rotation_quaternion", "rotation_euler", "rotation_axis_angle")
+        rotation_curves = [c for c in action_fcurves(action) if c.data_path.endswith(rotation_paths)]
+        bad_curves = [c.data_path for c in action_fcurves(action) if not c.data_path.endswith(rotation_paths)]
         if bad_curves:
             self.report({"ERROR"}, f"Only bone rotation can be saved (rotation-only rig contract). Remove keys on: {', '.join(sorted(set(bad_curves)))}")
             return {"CANCELLED"}
@@ -66,17 +67,15 @@ class CCS_OT_save_preset(bpy.types.Operator):
 
         significant_frames = sorted({round(point.co.x) for curve in rotation_curves for point in curve.keyframe_points})
         original_frame = scene.frame_current
-        poses_degrees: dict[int, dict[str, tuple[float, float, float]]] = {}
+        poses: dict[int, dict[str, tuple[float, float, float, float]]] = {}
         for frame in significant_frames:
             scene.frame_set(frame)
-            poses_degrees[frame] = {
-                bone.name: tuple(math.degrees(component) for component in bone.rotation_euler)
-                for bone in armature.pose.bones
-            }
+            # matrix_basis works whatever rotation mode the bone was keyed in.
+            poses[frame] = {bone.name: tuple(bone.matrix_basis.to_quaternion()) for bone in armature.pose.bones}
         scene.frame_set(original_frame)
 
         frames = significant_frames[-1]
-        saved_path = save_custom_clip(name, frames, scene.ccs_preset_loop, poses_degrees)
+        saved_path = save_custom_clip(name, frames, scene.ccs_preset_loop, poses)
         safe_name = safe_id(name)
         message = f"Saved preset '{safe_name}' ({frames} frames, {len(significant_frames)} keyframes) to {saved_path}"
         if safe_name in BUILTIN_CLIPS:
@@ -111,9 +110,11 @@ def register() -> None:
     bpy.types.Scene.ccs_preset_loop = bpy.props.BoolProperty(name="Loops", default=True)
 
 
-def frame_view(armature, mesh) -> None:
+def frame_view(armature, meshes) -> None:
     bpy.ops.object.select_all(action="DESELECT")
-    mesh.select_set(True); armature.select_set(True)
+    for mesh in meshes:
+        mesh.select_set(True)
+    armature.select_set(True)
     bpy.context.view_layer.objects.active = armature
     for area in bpy.context.window.screen.areas:
         if area.type == "VIEW_3D":
@@ -136,9 +137,8 @@ def preview(config_path: Path, clip_name: str) -> None:
 
     register()
 
-    armature, mesh, _bones = build_character(config)
-    armature.animation_data_create()
-    bake_pose_action(armature, clip_name, clip)
+    armature, meshes, _bones = build_character(config)
+    bake_clips(armature, {clip_name: clip})
 
     scene = bpy.context.scene
     scene.frame_start = 1
@@ -154,7 +154,7 @@ def preview(config_path: Path, clip_name: str) -> None:
     bpy.app.handlers.frame_change_pre.append(loop_handler)
 
     if not bpy.app.background:
-        frame_view(armature, mesh)
+        frame_view(armature, meshes)
         bpy.ops.screen.animation_play()
     else:
         print(f"PREVIEW_BUILT_HEADLESS {clip_name} frames={clip['frames']}")

@@ -18,7 +18,8 @@ if str(ROOT) not in sys.path:
 
 from animation_library import clips
 from character_config import load_config, safe_id
-from rig_builder import action_fcurves, bake_pose_action, build_character, export_material_textures
+from retarget import bake_clips
+from rig_builder import action_fcurves, bake_export_materials, build_character, export_textures
 
 
 def after_double_dash() -> list[str]:
@@ -48,9 +49,9 @@ def save_blend(blend_path: Path, armature, clip_names: list[str]) -> None:
     for image in bpy.data.images:
         if image.filepath_raw and not image.packed_file:
             image.pack()
-    # Drop leftovers from Blender's startup scene (e.g. the default cube's
-    # mesh and "Material") that build_character's object delete orphaned.
-    # Fake-user Actions and everything the character uses are kept.
+    # Drop leftovers (Blender's startup scene, MPFB build helpers, the
+    # export-only baked images). Fake-user Actions and everything the
+    # character uses are kept.
     bpy.data.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(blend_path), check_existing=False)
 
@@ -59,34 +60,40 @@ def build(config_path: Path) -> None:
     config = load_config(config_path)
     output_dir = (ROOT / config["output_root"] / safe_id(config["character_id"])).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    armature, mesh, bones = build_character(config)
-    texture_paths = export_material_textures(config, output_dir)
+    armature, meshes, bones = build_character(config)
+    # Original asset textures, copied next to the build (the .blend's
+    # materials use these; colour slots are shader effects on top).
+    texture_paths = export_textures(output_dir)
+    # Baked final colours, used by the FBX/GLB exports below.
+    baked_paths, restore_materials = bake_export_materials(meshes, output_dir / "Textures")
 
     def select_exportables():
-        bpy.ops.object.select_all(action="DESELECT"); mesh.select_set(True); armature.select_set(True); bpy.context.view_layer.objects.active = armature
+        bpy.ops.object.select_all(action="DESELECT")
+        for mesh in meshes:
+            mesh.select_set(True)
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
 
     select_exportables()
     preview_path = output_dir / f"{config['character_id']}_Preview.glb"
     if config["export_preview_glb"]:
         # export_apply=True so the GLB carries the same modifier-applied
-        # geometry as the FBX exports (the Bevel modifier);
-        # without it the GLB showed the un-bevelled mesh. The exporter keeps
-        # the Armature modifier out of the apply and exports it as a skin.
+        # geometry as the FBX exports (subdivision, and the masks that hide
+        # MPFB's helper geometry and the body skin under clothes). The
+        # exporter keeps the Armature modifier out of the apply and exports
+        # it as a skin.
         bpy.ops.export_scene.gltf(filepath=str(preview_path), export_format="GLB", use_selection=True, export_apply=True)
 
-    # Bind-pose model FBX, no animation. Exported before any actions exist so
-    # Unity has a clean model import that isn't coupled to the combined-take
-    # FBX below; both reference this same armature object, so bone names,
-    # hierarchy, and bind pose stay identical between them.
+    # Bind-pose model FBX, no animation, exported before any clip Actions
+    # exist; it shares the armature object with the combined-take FBX
+    # below, so bone names, hierarchy, and bind pose stay identical.
     model_path = output_dir / f"{config['character_id']}_Model.fbx"
     if config["export_separate_animations"]:
         select_exportables()
         bpy.ops.export_scene.fbx(filepath=str(model_path), use_selection=True, object_types={"ARMATURE", "MESH"}, axis_forward="-Z", axis_up="Y", add_leaf_bones=False, bake_anim=False, path_mode="COPY", embed_textures=True)
 
-    armature.animation_data_create()
     available = clips()
-    for clip_name in config["clips"]:
-        bake_pose_action(armature, clip_name, available[clip_name])
+    bake_clips(armature, {clip_name: available[clip_name] for clip_name in config["clips"]})
 
     location_curves = [curve.data_path for action in bpy.data.actions for curve in action_fcurves(action) if "location" in curve.data_path]
     if location_curves:
@@ -98,8 +105,8 @@ def build(config_path: Path) -> None:
 
     # Per-clip animation-only FBX files: skeleton only (no mesh), one baked
     # action each. Exported from the same armature object as the model FBX
-    # above, so the bone hierarchy matches exactly and Unity can retarget
-    # each clip onto the model's avatar.
+    # above, so the bone hierarchy matches exactly and other apps can
+    # retarget each clip onto the model.
     #
     # Each clip is exported through a single temporary NLA strip named after
     # the clip (bake_anim_use_nla_strips=True). The FBX exporter names that
@@ -125,13 +132,13 @@ def build(config_path: Path) -> None:
             animation_paths[clip_name] = str(clip_path)
 
     # The .blend is the primary output: the rigged character as built
-    # (Bevel modifier still live), its materials, and every
-    # selected clip as a named Action. Saved last so it reflects the final
-    # scene state after all exports.
+    # (modifiers live), its original, editable materials (the export
+    # wiring is undone first), and every selected clip as a named Action.
+    restore_materials()
     blend_path = output_dir / f"{config['character_id']}.blend"
     save_blend(blend_path, armature, config["clips"])
 
-    manifest = {"character_id": config["character_id"], "blend": str(blend_path), "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0}
+    manifest = {"character_id": config["character_id"], "blend": str(blend_path), "fbx": str(fbx_path), "model_fbx": str(model_path) if config["export_separate_animations"] else None, "animation_fbx": animation_paths, "preview_glb": str(preview_path) if config["export_preview_glb"] else None, "textures": texture_paths, "baked_textures": baked_paths, "bones": list(bones), "clips": config["clips"], "root_translation_keyframes": False, "unit_scale_m": 1.0}
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print("CHARACTER_SUITE_SUCCESS " + json.dumps(manifest))
 

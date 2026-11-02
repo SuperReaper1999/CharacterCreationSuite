@@ -6,15 +6,24 @@ process per build, exactly as the GUI's "Generate character" does. Then it
 inspects the outputs from inside Blender (tests/_blender_checks.py):
 
 - every file listed in manifest.json exists;
-- the .blend (primary output) has the armature, mesh, one fake-user
-  Action per clip (rotation-only), the first clip assigned, packed textures;
-- 52 bones in the .blend, the combined FBX, the model FBX and each clip FBX;
-- rotation-only contract: no moving location curves in any take;
+- the .blend (primary output): one armature with 53 bones including all 30
+  finger bones; body, eyes, eyebrows, eyelashes, hair, outfit and shoes,
+  all parented to and deformed by it; one fake-user Action per clip
+  (rotation-only), the first clip assigned; packed textures; body height
+  equal to target_height_m (within 1%);
+- colour slots with alpha 1 show up in the baked export textures;
+- 53 bones in the combined, model and per-clip FBX; the combined FBX
+  embeds the textures; no moving location curves in any take;
 - one take per selected clip in the combined FBX, and per-clip FBX takes
   named after the clip with the same frame range as the combined take;
-- the GLB preview is skinned and carries the modifier-applied (bevelled)
-  geometry, not the raw mesh;
-- Prone/Crawl lie face-down with natural elbow bend; Idle faces forward.
+- the GLB preview is skinned, textured and carries the modifier-applied
+  geometry;
+- Prone/Crawl lie face-down with natural elbow bend; Idle faces forward;
+- retarget accuracy: every arm, hand and finger bone follows the authored
+  clips on every keyed frame.
+
+Needs MPFB and the MakeHuman system assets installed in the Blender used
+(run setup_mpfb.py once).
 
 All output goes to a temporary folder; nothing is written under build/.
 
@@ -63,7 +72,8 @@ def make_runner(args: argparse.Namespace):
     blender = args.blender or find_blender()
     if not blender:
         raise SystemExit("Blender not found. Pass --blender PATH, or --bpy-python PATH for a Python with the bpy module.")
-    return lambda script, script_args: [blender, "--background", "--factory-startup", "--python", str(script), "--", *script_args]
+    # No --factory-startup: MPFB is an extension installed in the user's prefs.
+    return lambda script, script_args: [blender, "--background", "--python", str(script), "--", *script_args]
 
 
 def run(command: list[str]) -> subprocess.CompletedProcess:

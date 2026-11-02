@@ -2,7 +2,54 @@
   "character_id": "Zombie",
   "display_name": "Zombie",
   "target_height_m": 1.78,
-  "proportions": {"shoulder_width": 1.08, "torso_length": 1.05, "arm_length": 1.1, "leg_length": 0.96, "head_scale": 0.95, "body_width": 1.12},
-  "materials": {"skin": [0.42, 0.58, 0.38, 1.0], "top": [0.5, 0.06, 0.06, 1.0], "bottom": [0.07, 0.07, 0.08, 1.0], "shoes": [0.03, 0.03, 0.03, 1.0]},
-  "clips": ["Idle", "Run", "Jump", "ZombieAttack"]
+  "body": {
+    "gender": 1.0,
+    "age": 0.65,
+    "muscle": 0.4,
+    "weight": 0.35
+  },
+  "skin": "middleage_caucasian_male",
+  "hair": "short04",
+  "outfit": "male_casualsuit04",
+  "shoes": "shoes02",
+  "proportions": {
+    "shoulder_width": 1.08,
+    "torso_length": 1.05,
+    "arm_length": 1.1,
+    "leg_length": 0.96,
+    "head_scale": 0.95,
+    "body_width": 1.12
+  },
+  "materials": {
+    "skin": [
+      0.42,
+      0.58,
+      0.38,
+      0.85
+    ],
+    "top": [
+      0.5,
+      0.06,
+      0.06,
+      1.0
+    ],
+    "bottom": [
+      0.07,
+      0.07,
+      0.08,
+      1.0
+    ],
+    "shoes": [
+      0.03,
+      0.03,
+      0.03,
+      1.0
+    ]
+  },
+  "clips": [
+    "Idle",
+    "Run",
+    "Jump",
+    "ZombieAttack"
+  ]
 }

@@ -8,14 +8,15 @@ import re
 from pathlib import Path
 from typing import Any
 
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2
 BUILTIN_CLIPS = ("Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit", "Crouch", "CrouchWalkRifle", "Prone", "Crawl", "ZombieAttack")
 # Suffix older configs used for the 52-bone versions of the built-in clips
 # (e.g. "IdleExtended"), from when a 16-bone rig also existed. Those
 # versions are now the only ones and use the plain names; validate_config
 # maps the old names over.
 LEGACY_CLIP_SUFFIX = "Extended"
-# The 52-bone rig built by rig_builder.py: body bones, then 3 segments per
+# The 52-bone authoring skeleton (authoring_skeleton.py) that the built-in
+# clips are written against: body bones, then 3 segments per
 # finger (Proximal=1, Intermediate=2, Distal=3), named
 # "<Finger><segment>.<L|R>" (the Unity Humanoid finger convention).
 FINGER_BONE_NAMES = tuple(f"{finger}{segment}.{side}" for side in ("L", "R") for finger in ("Thumb", "Index", "Middle", "Ring", "Little") for segment in (1, 2, 3))
@@ -40,10 +41,23 @@ def default_config() -> dict[str, Any]:
         "character_id": "NewCharacter",
         "display_name": "New Character",
         "target_height_m": 1.75,
+        # MakeHuman body macros, 0-1: gender (0 female, 1 male), age
+        # (0.5 = 25 years), muscle and weight (0.5 = average).
+        "body": {"gender": 1.0, "age": 0.5, "muscle": 0.5, "weight": 0.5},
+        # MPFB asset names (folder names in MPFB's data/skins, data/hair,
+        # data/clothes). Empty hair/outfit/shoes = none.
+        "skin": "young_caucasian_male",
+        "hair": "short02",
+        "outfit": "male_casualsuit01",
+        "shoes": "shoes01",
         "proportions": {"shoulder_width": 1.0, "torso_length": 1.0, "arm_length": 1.0, "leg_length": 1.0, "head_scale": 1.0, "body_width": 1.0},
+        # Colour slots, linear RGBA. Alpha is the strength: 0 keeps the
+        # asset's own texture colours, 1 applies the colour fully (skin is
+        # multiplied with the skin texture; top/bottom/shoes recolour the
+        # fabric while keeping its shading).
         "materials": {
-            "skin": [0.90, 0.65, 0.45, 1.0], "top": [0.10, 0.35, 0.90, 1.0],
-            "bottom": [0.05, 0.05, 0.12, 1.0], "shoes": [0.02, 0.02, 0.02, 1.0],
+            "skin": [1.0, 1.0, 1.0, 0.0], "top": [0.10, 0.35, 0.90, 0.0],
+            "bottom": [0.05, 0.05, 0.12, 0.0], "shoes": [0.02, 0.02, 0.02, 0.0],
         },
         "clips": ["Idle", "Run", "Jump", "MeleeAttack", "HarvestSwing", "Fire", "Sit"],
         "output_root": "build",
@@ -73,16 +87,23 @@ def _current_clip_name(name: str) -> str:
 
 def validate_config(raw: dict[str, Any]) -> dict[str, Any]:
     config = default_config()
-    config.update({key: value for key, value in raw.items() if key not in ("proportions", "materials", "clips")})
+    config.update({key: value for key, value in raw.items() if key not in ("proportions", "materials", "clips", "body")})
     config["character_id"] = safe_id(config["character_id"])
     config["display_name"] = str(config["display_name"]).strip() or config["character_id"]
     # "archetype" was a label nothing read; it was removed. Drop it from
     # older configs so it isn't carried forward when they are re-saved.
     config.pop("archetype", None)
-    # "rig_type" chose between a 16-bone and the 52-bone rig; only the
-    # 52-bone rig remains, so older configs' value is dropped.
+    # "rig_type" chose between two old procedural rigs; characters are now
+    # always built by MPFB, so older configs' value is dropped.
     config.pop("rig_type", None)
     config["target_height_m"] = _number(config["target_height_m"], 0.8, 2.8, 1.75)
+    body = raw.get("body", {}) if isinstance(raw.get("body", {}), dict) else {}
+    config["body"] = {key: _number(body.get(key, value), 0.0, 1.0, value) for key, value in default_config()["body"].items()}
+    for key in ("skin", "hair", "outfit", "shoes"):
+        value = str(config.get(key) or "").strip()
+        config[key] = re.sub(r"[^A-Za-z0-9_-]+", "", value)
+    if not config["skin"]:
+        config["skin"] = default_config()["skin"]
     config["output_root"] = str(config["output_root"] or "build")
     config["export_preview_glb"] = bool(config["export_preview_glb"])
     config["export_separate_animations"] = bool(config["export_separate_animations"])

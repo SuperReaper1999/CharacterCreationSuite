@@ -1,39 +1,74 @@
 # Character Creation Suite
 
-A Blender character generator: it builds a rigged, animated low-poly humanoid from a JSON preset and saves it as a `.blend`. FBX and GLB exports are written alongside for use in other apps.
+A Blender character generator. It builds a realistic, rigged, animated human from a JSON preset and saves it as a `.blend`. FBX and GLB exports are written alongside for other apps.
 
-Double-click `Run Character Creation Suite.bat` (or run `python character_suite.py`; Blender 5.0 must be on PATH or in its default install folder), load a preset from `presets/` (`player` or `zombie`), customise it, then select **Generate character**.
+The character itself comes from [MPFB](https://extensions.blender.org/add-ons/mpfb/) (MakeHuman Plugin For Blender) and the MakeHuman system assets:
 
-The Character tab includes a fast live silhouette preview for proportions and
-palette changes. The Materials tab has native colour pickers and swatches; the
-generated `.blend` is the authoritative final result (the GLB carries the same geometry).
+- a real body shaped by MakeHuman targets (gender, age, muscle, weight, height, proportions);
+- a real skin texture, eyes, eyebrows, eyelashes and hair;
+- a textured outfit and shoes, fitted to the body;
+- MPFB's `game_engine` rig: 53 bones, including 3 bones per finger on both hands, with skin weights for the body and every clothing item.
 
-Each clip in the Animations tab has a **View anim in Blender** button. It opens an interactive Blender window on the character as currently configured in the tabs (proportions, materials, height) with that one clip baked and looping, so you can orbit and inspect it before committing to a build — it's the exact same rig code path as the real export (`rig_builder.py`), not a separate stand-in. Close the window when you're done; it only writes a scratch `build/_preview/character_config.json`, never anything under the character's own `build/<character-id>/` output folder.
+The suite adds the config/preset workflow, colour slots, 12 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
 
-The preview window is also an editor. Enter Pose Mode, adjust the bones, insert keyframes as usual (`I` with all bones selected keys the whole pose, matching how every clip here is authored), then use the **Character Suite** panel in the 3D viewport's side tab (`N`) to name it and hit **Save as Preset Animation**. That samples every frame that has a keyframe on any bone and writes a rotation-only JSON to `presets/animations/<name>.json` — reusing that same name overrides a built-in clip of the same name (you'll get a warning, not a block); a new name adds a new one. Saving is rejected if the action has any location/scale keys, so the rotation-only contract below can't be broken from the editor either. Back in the suite, click **Refresh clip list** (or reload a config) to pick up anything saved or changed since the window opened.
+## Setup
+
+1. Install Blender 5.0 or newer.
+2. Install MPFB and the MakeHuman system assets into that Blender, once:
+
+   ```
+   blender --background --python setup_mpfb.py
+   ```
+
+   This downloads two files, checks each one's SHA-256 against the versions the suite was tested with, installs the MPFB extension (v2.0.18) into Blender's `user_default` extension repository and enables it, and unpacks the asset pack (267 MB) into MPFB's user data folder. To use files you've already downloaded, pass `-- --mpfb-zip <path> --assets-zip <path>`. Running it again skips whatever is already installed (`--force` reinstalls).
+
+   - MPFB: <https://extensions.blender.org/add-ons/mpfb/> — GPL-3.0-or-later, by Joel Palmius and the MakeHuman team. It is installed into your Blender, not included in this repository.
+   - MakeHuman system assets: <https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html> — CC0 (skins, eyes, eyebrows, eyelashes, hair, clothes, shoes).
+
+3. Double-click `Run Character Creation Suite.bat` (or run `python character_suite.py`; Blender must be on PATH or in its default install folder), load `presets/player.json` or `presets/zombie.json`, customise it, then select **Generate character**.
+
+## The app
+
+- **Character tab:** ID, display name, target height, and the MPFB assets to use: **Skin**, **Hair**, **Outfit**, **Shoes**. The lists are read from MPFB's asset folder in your Blender config; the fields are editable if it isn't found. The live preview on the right is a fast silhouette guide only; the `.blend` is the real result.
+- **Proportions tab:** shoulder width, torso length, arm length, leg length, head size, body width (ratios, 1.0 = neutral), plus the MakeHuman body sliders gender (0 female – 1 male), age (0.5 = 25 years), muscle and weight.
+- **Materials tab:** the colour slots (see below).
+- **Animations tab:** pick clips to include. Each clip has a **View anim in Blender** button that opens an interactive Blender window on the character as currently configured, with that clip looping. It builds the character with the exact same code as the export, and only writes a scratch `build/_preview/character_config.json`.
+
+The preview window is also an editor. Enter Pose Mode, adjust the bones, insert keyframes as usual (`I` with all bones selected keys the whole pose), then use the **Character Suite** panel in the 3D viewport's side tab (`N`) to name it and hit **Save as Preset Animation**. That samples every frame that has a keyframe and writes `presets/animations/<name>.json`, storing each bone's local rotation on the character's own rig as a quaternion. Reusing a built-in clip's name overrides it (you'll get a warning). Saving is rejected if the action has any location/scale keys, so clips stay rotation-only. Back in the suite, click **Refresh clip list** to pick it up.
+
+## Config
+
+A preset is a JSON file:
+
+| Key | Meaning |
+|---|---|
+| `character_id`, `display_name` | Names; `character_id` is used for files and objects. |
+| `target_height_m` | Barefoot body height in metres. MakeHuman's height slider is solved to reach it; anything beyond that slider's range is reached by uniform scaling. |
+| `body` | `gender`, `age`, `muscle`, `weight`, each 0–1 (MakeHuman macros). |
+| `skin`, `hair`, `outfit`, `shoes` | MPFB asset folder names (`data/skins/…`, `data/hair/…`, `data/clothes/…`). Empty hair/outfit/shoes = none. |
+| `proportions` | Six ratios (0.55–1.8), mapped to MakeHuman measurement targets. |
+| `materials` | Colour slots `skin`, `top`, `bottom`, `shoes`, as linear RGBA. |
+| `clips` | Clip names to include. |
+| `export_preview_glb`, `export_separate_animations` | Turn the GLB and the separate model/per-clip FBX files on or off. |
+
+**Colour slots.** Alpha is the strength: 0 keeps the asset's own texture colours, 1 applies the colour fully. `skin` multiplies the skin texture by the colour (the zombie preset uses this to tint its skin green). `top`, `bottom` and `shoes` recolour the fabric while keeping its shading: the texture's brightness pattern is kept and rescaled so its average matches the colour. Top and bottom are told apart per UV island by height: islands whose average height is above the hips count as top. That works for every shirt/trousers, jacket/trousers and top/skirt outfit in the system pack. Bib-style garments such as `male_worksuit01` (overalls) have straps above the hips, which get the top colour.
+
+Older configs still load: `rig_type` and `archetype` are dropped, and clip names ending in `Extended` map to the plain name. Their colour slots had alpha 1, so they recolour fully.
 
 ## Output
 
-The suite writes all generated output to `build/<character-id>/`:
+Everything goes to `build/<character-id>/`:
 
-- `<character-id>.blend` — **the primary output.** The rigged character as built (the Bevel modifier is left live, not applied), its materials with textures packed into the file, and every selected clip as a named Action. Each Action has a fake user so all of them are kept; switch between them in the Action Editor. The first selected clip is assigned on open, with the scene frame range set to it. Blender-native axes (Z-up), 30 fps.
-- `<character-id>.fbx` — FBX export with every selected clip baked in as a take, for game engines and other apps (axes converted to `-Z` forward, `Y` up).
-- `<character-id>_Model.fbx` — the same mesh and rig with no animation, for pipelines that import the model and clips as separate assets.
-- `Animations/<clip-name>.fbx` — one skeleton-only FBX per selected clip, no mesh. Each shares the exact bone names and hierarchy of `<character-id>_Model.fbx`, so retargeting maps cleanly onto the model. Each file's single take is named after the clip (e.g. `Run`) and starts at frame 0, the same timing as the matching take in `<character-id>.fbx`.
-- `<character-id>_Preview.glb` — bind-pose preview with no animation, exported with modifiers applied so it has the same bevelled geometry as the FBX.
-- `Textures/<character-id>_<material>.png` — one small solid-colour texture per material (`skin`/`top`/`bottom`/`shoes`), wired into that material's Base Color. The `.blend` packs these; `<character-id>.fbx` and `<character-id>_Model.fbx` embed them (`embed_textures=True`) as well as referencing the standalone files, so the FBX alone shows the right colours even without the `Textures/` folder next to it.
+- `<character-id>.blend` — **the primary output.** The character as built: armature, body, eyes, eyebrows, eyelashes, hair, outfit and shoes, with MPFB's modifiers and the editable colour-slot shader nodes left live. Every selected clip is a named Action with a fake user, so all of them are kept; switch between them in the Action Editor. The first clip is assigned on open, with the scene frame range set to it. Textures are packed into the file, so expect it to be around 20–25 MB. Blender-native axes (Z-up, character facing −Y), 30 fps.
+- `<character-id>.fbx` — FBX with every selected clip baked in as a take, textures embedded (axes converted to `-Z` forward, `Y` up).
+- `<character-id>_Model.fbx` — the same meshes and rig with no animation.
+- `Animations/<clip-name>.fbx` — one skeleton-only FBX per clip, no mesh, same bones and hierarchy as the model. Each file's single take is named after the clip and starts at frame 0, the same timing as the matching take in `<character-id>.fbx`.
+- `<character-id>_Preview.glb` — bind-pose preview with no animation, textured, exported with modifiers applied.
+- `Textures/` — the original asset textures (diffuse, normal, AO, …) that the `.blend` materials use, plus `<material>_basecolor.png`: each material's final colour (tints and recolours included), baked with Cycles. The FBX and GLB use the baked ones, because FBX can't carry shader node setups. Body skin hidden under clothing is masked out of the exported mesh, so those areas of the skin bake are left black.
 - `character_config.json` — reproducible build configuration.
-- `manifest.json` — generated asset contract and validation metadata, including `blend`, `model_fbx`, `animation_fbx`, and `textures` paths.
+- `manifest.json` — asset contract: paths of everything above, bone names, clips.
 
-The model and per-clip animation FBX files are on by default (`export_separate_animations` in the config); set it to `false` to skip them and only produce the combined `<character-id>.fbx`. Set `export_preview_glb` to `false` to skip the GLB.
-
-## The rig
-
-Every character uses the same fixed 52-bone humanoid: `Hips`, `Spine`/`Chest`/`UpperChest`, `Neck`, `Head`, `Shoulder`/`UpperArm`/`Forearm`/`Hand` per side, `UpperLeg`/`LowerLeg`/`Foot`/`Toe` per side, and full fingers — `Thumb`/`Index`/`Middle`/`Ring`/`Little`, each split into 3 segments named `<Finger>1/2/3.<L|R>` for Proximal/Intermediate/Distal (the Unity Humanoid finger convention), 30 bones across both hands. Height, proportions (shoulder width, torso length, arm length, leg length, head size, body width) and the four material colours are configurable per character.
-
-The mesh is built from simple primitives: the neck, arms, legs, toes, and every finger segment are cylinders; the torso is three stacked boxes matching the `Spine`/`Chest`/`UpperChest` bones so bending the spine deforms it; the head is a sphere. The whole mesh gets a bevel modifier (`offset_type="PERCENT"`, 25%, angle-limited) plus smooth shading. PERCENT scales the bevel to each edge's own length, so the same modifier rounds both the torso boxes and the tiny finger segments proportionally — a fixed absolute width sized for the torso would swallow a whole finger segment, and one sized for fingers would barely dent the torso. The bevel modifier is added *before* the Armature modifier, so it rounds the rest-pose geometry once and the armature deforms that already-rounded result per frame — adding it after would mean re-bevelling posed geometry on every frame, including at extreme bends where it could self-intersect.
-
-The head has a simple face: two eyes (white sphere + smaller dark pupil sphere), a nose (a small forward-pointing cone — the only rotated primitive in the rig; it's rotated -90° about X after creation so its point aims along +Y), and a mouth (a thin dark box). All of it is geometry, not a texture. Eyes/pupils/mouth use two fixed materials (`eye_white`, `eye_dark`) that aren't part of `config["materials"]` — an eye colour isn't a clothing choice the way skin/top/bottom/shoes are, so it doesn't go through the configurable palette and isn't included in the per-material texture export. All five face parts are bound directly to the `Head` bone, since none of them move independently of the head.
+The model and per-clip animation FBX files are on by default (`export_separate_animations`); set it to `false` to only produce the combined FBX. A build takes about 30 seconds plus a few seconds per clip on a typical CPU, most of it baking the export textures.
 
 ## Animations
 
@@ -49,42 +84,43 @@ The head has a simple face: two eyes (white sphere + smaller dark pupil sphere),
 | `Fire` | 12 | no | Short right-arm recoil. |
 | `Sit` | 30 | yes | Seated, knees at 90°. |
 | `Crouch` | 30 | yes | Held crouch, feet flat. |
-| `CrouchWalkRifle` | 31 | yes | Crouched stride with both arms held in a two-handed rifle-ready pose (the arms don't swing with the gait). |
+| `CrouchWalkRifle` | 31 | yes | Crouched stride with both arms held forward in a two-handed rifle-ready pose. |
 | `Prone` | 30 | yes | Lying face-down (see below). |
-| `Crawl` | 31 | yes | Stride cycle on the face-down pose (see below). |
+| `Crawl` | 31 | yes | Stride cycle on the face-down pose. |
 | `ZombieAttack` | 30 | no | Two-armed lunge. |
 
-The player preset selects `Idle`, `Run`, `Jump`, `MeleeAttack`, `HarvestSwing`, `Fire`, and `Sit`; tick any others in the Animations tab to include them in a build.
+**How clips are authored.** Each clip is keyed as local Euler rotations on the suite's own *authoring skeleton* (`authoring_skeleton.py`: 52 bones, facing +Y, arms hanging straight down), on the main body bones only (`animation_library._authored_clips`). `animation_library._expand_pose` fills in the rest of that skeleton from those values: the `Chest` rotation is split 0.35/0.35/0.30 across `Spine`/`Chest`/`UpperChest`; `Shoulder` gets 15% of `UpperArm`'s rotation; `Toe` gets 40% of `Foot`'s (or 15% of `LowerLeg`'s); and the fingers get a fixed relaxed curl into the palm.
 
-**How clips are authored.** Each clip is keyed on the main body bones (`Hips`, `Chest`, `Neck`, `Head`, arms, legs, feet) in `animation_library._authored_clips`. `animation_library._expand_pose` then fills in the rest of the rig from those values, so the extra joints follow the authored motion rather than being keyed by hand: the `Chest` rotation is split 0.35/0.35/0.30 across `Spine`/`Chest`/`UpperChest` (the fractions sum to 1, so the total bend at the top of the spine matches the authored value, just arriving as a curve instead of one hinge); `Shoulder.L`/`R` gets 15% of `UpperArm.L`/`R`'s rotation; `Toe.L`/`R` gets 40% of `Foot`'s rotation (or 15% of `LowerLeg`'s, for clips that don't key `Foot`). Fingers get a fixed relaxed-hand curl in every frame of every clip (heavier at the middle knuckle than the tip) — a static baseline, since nothing in a pose signals "gripping" vs "open hand" reliably enough to vary it.
+**How they get onto the character** (`retarget.py`). The authoring skeleton is never exported. For every keyed frame, a temporary authoring armature is posed with the clip. Each authoring bone's rotation relative to its rest pose is taken in world space, turned 180° to the character's facing, and applied to the matching `game_engine` bone, then keyed as a local quaternion. Before that, the character's arm, hand and finger bones are aligned from MPFB's A-pose to the authoring rest pose. The arm is aligned as a chain (the upper arm swings down and the rest follows), which keeps the natural twist so the palms face the thighs. The whole arm also hangs 10° outward (`ARM_ABDUCTION_DEG`), because MPFB's shoulders sit closer to the body than the authoring skeleton's and straight-down arms would pass through the hips. Spine, legs, feet, neck and head keep their own anatomical rest direction. The transfer works in world space, so differences in bone naming and roll between the two rigs don't matter, and it adapts to each character's proportions. No location keys are ever written.
 
-**Prone and Crawl.** `Prone` tips the whole rig forward ~80° around the hip bone's rest height so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent). Because clips are rotation-only (see below), the pose cannot carry the downward offset needed to put the body on the ground: for a 1.75 m-tall character the hip pivot sits at `target_height_m * (0.90 / 2.69)` ≈ 0.59 m, so the posed mesh spans roughly 0.12–1.01 m above the ground until whatever plays the clip lowers the character by that offset while it's prone — in Blender, move the armature object down; in a game engine, the root transform (and collider). This range is measured by `tests/smoke_test.py` (it prints it as an `INFO` line). `Crawl` is a stride cycle on top of that same face-down pose; its arm/leg swing is authored on different rotation axes than the other clips (Y/Z instead of X), because an X-axis stride swing on top of the Hips' 80° pitch lifts the limbs off the ground instead of sweeping them along it.
+Custom clips saved from the preview editor are stored in the character's own bone space and keyed directly. Custom clips saved by earlier versions (Euler degrees on authoring bone names) are retargeted like the built-ins.
+
+**Prone and Crawl.** `Prone` tips the whole body forward ~80° around the pelvis so the character lies face-down (chest toward the ground, head lifted to look ahead, elbows slightly bent). Clips are rotation-only, so the pose can't carry the downward offset that would put the body on the ground: for a 1.75 m character the body spans roughly 0.72–1.16 m above the ground. Whatever plays the clip has to lower the character while it's prone: in Blender, move the armature object down; in a game engine, the root transform (and collider). `tests/smoke_test.py` prints the measured range as an `INFO` line. `Crawl`'s limb swing is authored on Y/Z rotations rather than X, because an X-axis stride swing on top of the 80° pitch lifts the limbs off the ground instead of sweeping them along it.
 
 ## Testing
 
-`tests/smoke_test.py` is a headless end-to-end check. It builds every preset in `presets/` plus an "every clip" character, each through the real `blender_build.py` in a fresh Blender process (the same path as **Generate character**), then inspects the outputs from inside Blender:
+`tests/smoke_test.py` is a headless end-to-end check, and needs MPFB installed in the Blender it uses. It builds both presets plus an "every clip" character, each through the real `blender_build.py` in a fresh Blender process (the same path as **Generate character**), then checks:
 
-- every file listed in `manifest.json` exists;
-- the `.blend` opens with the armature (52 bones), mesh, one fake-user Action per clip (rotation-only), the first clip assigned, and packed textures;
-- 52 bones in the combined, model, and per-clip FBX;
-- no take has moving location keys (the rotation-only contract);
-- the combined FBX has one take per clip, and each per-clip FBX has one take named after its clip with the same frame range;
-- the GLB is skinned and carries the modifier-applied geometry;
-- `Prone`/`Crawl` face the ground with naturally bent elbows, and `Idle` faces forward.
+- the `.blend`: one armature with 53 bones including all 30 finger bones; body, eyes, eyebrows, eyelashes, hair, outfit and shoes, all rigged; one fake-user Action per clip, rotation-only, the first one assigned; packed textures; body height within 1% of `target_height_m`;
+- that every colour slot with alpha 1 shows up in the baked texture over its region;
+- the FBX files: 53 bones, all meshes, embedded textures, takes named after clips with matching frame ranges, rotation-only;
+- the GLB: skinned with 53 joints, textured, with the modifier-applied geometry;
+- `Prone`/`Crawl` face the ground with naturally bent elbows, and `Idle` faces forward;
+- retarget accuracy: on every keyed frame of every clip, every arm, hand and finger bone points where the authored clip says, within the 10° outward tilt.
 
 ```
 python tests/smoke_test.py                                  # finds blender on PATH or the default install paths
 python tests/smoke_test.py --blender "C:\Program Files\Blender Foundation\Blender 5.0\blender.exe"
-python tests/smoke_test.py --bpy-python <python with "pip install bpy">
+python tests/smoke_test.py --bpy-python <python with "pip install bpy" and MPFB set up>
 ```
 
-It writes only to a temporary folder (pass `--keep` to keep it) and exits non-zero if any check fails. It needs no tkinter. It does not test the GUI, the interactive Blender preview/editor, or how other apps import the FBX.
+It writes only to a temporary folder (`--keep` keeps it), exits non-zero if any check fails, and takes about 2 minutes. It does not test the GUI, the interactive preview/editor, or how other apps import the FBX.
 
-## Design boundaries
+## Design boundaries and known limitations
 
-- One fixed 52-bone rig hierarchy. Proportions, materials, height, and clip selection are configurable.
-- Every generated clip has rotation-only bone keys. Root translation/root motion is never authored — this is why `Prone` needs the character lowered by the scene or engine rather than having it baked into the clip (see above).
+- One rig: MPFB `game_engine` (53 bones). Body shape, height, assets, colours and clip selection are configurable.
+- Every clip has rotation-only bone keys; root motion is never authored (see Prone above).
 - Animation events/markers for game engines are not generated.
-- The `.blend` is Blender-native. Only the FBX export converts axes: `-Z` forward, `Y` up, all Actions as takes, and no leaf bones.
-- Each of the 4 configurable materials (`skin`/`top`/`bottom`/`shoes`) is backed by a small solid-colour PNG texture, not just a flat material value, and every body part except the face uses one of those 4 — there's no per-body-part texture, since parts sharing a material would just be pixel-identical duplicates of it.
-- Older configs still load: a `rig_type` value is dropped, and clip names ending in `Extended` (e.g. `IdleExtended`, from when a second, 16-bone rig existed) are mapped to the plain name.
+- The top/bottom colour split is a height heuristic per UV island (see Colour slots).
+- In the FBX/GLB, colours come from the baked textures: a snapshot taken at build time. In the `.blend` they are live shader nodes.
+- Developed and tested headlessly with the Blender 5.1.2 Python module (`pip install bpy`) on Linux. Blender 5.0 itself, Windows, and the tkinter GUI weren't run during development.

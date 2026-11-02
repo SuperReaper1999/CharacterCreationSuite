@@ -4,6 +4,7 @@
     <blender> --background --python tests/_blender_checks.py -- poses <config.json>
 
 Prints one "PASS <check>" / "FAIL <check>: <detail>" / "INFO <note>" line per check.
+Needs MPFB installed in this Blender (setup_mpfb.py) for the "poses" checks.
 """
 
 from __future__ import annotations
@@ -16,18 +17,22 @@ from pathlib import Path
 
 import bpy  # must come first: with the pip "bpy" module, addon_utils/mathutils only resolve after it
 import addon_utils
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from animation_library import builtin_clips  # noqa: E402
-from character_config import BONE_NAMES, load_config  # noqa: E402
-from rig_builder import action_fcurves, bake_pose_action, build_character  # noqa: E402
+from character_config import load_config  # noqa: E402
+from retarget import ALIGNED_TARGETS, ARM_ABDUCTION_DEG, BONE_MAP, Retargeter, bake_clips  # noqa: E402
+from rig_builder import REGION_ATTRIBUTE, action_fcurves, body_height, build_character  # noqa: E402
 
 FBX_TIME_PER_SECOND = 46186158000
 FPS = 30
+EXPECTED_BONES = 53  # MPFB game_engine rig: Root + 52, including 3 bones per finger
+FINGER_BONES = [f"{finger}_0{segment}_{side}" for side in ("l", "r") for finger in ("thumb", "index", "middle", "ring", "pinky") for segment in (1, 2, 3)]
+CHARACTER_FRONT = Vector((0, -1, 0))  # MPFB characters face -Y
 failed = False
 
 
@@ -43,7 +48,7 @@ def reset() -> None:
 
 def fbx_takes(path: Path) -> dict[str, tuple[float, float]]:
     """Take (AnimationStack) name -> (LocalStart, LocalStop) in frames, read
-    from the raw FBX — the names and ranges Unity's importer sees."""
+    from the raw FBX — the names and ranges an importer sees."""
     addon_utils.enable("io_scene_fbx")
     from io_scene_fbx import parse_fbx
     root, _version = parse_fbx.parse(str(path))
@@ -88,54 +93,116 @@ def glb_summary(path: Path) -> dict:
         "vertices": sum(gltf["accessors"][primitive["attributes"]["POSITION"]]["count"] for primitive in primitives),
         "skinned": bool(primitives) and all("JOINTS_0" in primitive["attributes"] for primitive in primitives),
         "joints": [len(skin["joints"]) for skin in gltf.get("skins", [])],
+        "textures": len(gltf.get("images", [])),
     }
+
+
+def srgb_to_linear(channel: float) -> float:
+    return channel / 12.92 if channel <= 0.04045 else ((channel + 0.055) / 1.055) ** 2.4
+
+
+def baked_region_colour(obj, image_path: str, region: float) -> Vector | None:
+    """Mean linear colour of a baked texture over one colour-slot region's UVs."""
+    image = bpy.data.images.load(image_path)
+    width, height = image.size
+    pixels = image.pixels[:]
+    uvs = obj.data.uv_layers.active.data
+    mask = obj.data.color_attributes[REGION_ATTRIBUTE].data
+    total, count = Vector((0.0, 0.0, 0.0)), 0
+    for polygon in obj.data.polygons:
+        for loop_index in polygon.loop_indices:
+            if abs(mask[loop_index].color[0] - region) > 0.5:
+                continue
+            u, v = uvs[loop_index].uv
+            offset = (min(height - 1, int((v % 1) * height)) * width + min(width - 1, int((u % 1) * width))) * 4
+            total += Vector([srgb_to_linear(pixels[offset + channel]) for channel in range(3)])
+            count += 1
+    bpy.data.images.remove(image)
+    return total / count if count else None
 
 
 def check_outputs(config_path: Path, output_dir: Path) -> None:
     config = load_config(config_path)
     character = config["character_id"]
-    expected_bones = len(BONE_NAMES)
     manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
 
-    listed = [manifest["blend"], manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(), *manifest["textures"].values()]
+    listed = [manifest["blend"], manifest["fbx"], manifest["model_fbx"], manifest["preview_glb"], *manifest["animation_fbx"].values(),
+              *manifest["textures"].values(), *manifest["baked_textures"].values()]
     missing = [path for path in listed if path and not Path(path).is_file()]
     check(f"{character}: manifest files exist", not missing, f"missing {missing}")
     check(f"{character}: manifest clips match config", manifest["clips"] == config["clips"], f"{manifest['clips']} != {config['clips']}")
 
-    # .blend (primary output): character, one fake-user Action per clip,
-    # first clip assigned, rotation-only, packed textures.
+    # .blend (primary output).
     reset()
     bpy.ops.wm.open_mainfile(filepath=manifest["blend"])
     armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
     meshes = [obj for obj in bpy.data.objects if obj.type == "MESH"]
-    bones = len(armatures[0].data.bones) if armatures else 0
-    check(f"{character}: .blend has one armature ({expected_bones} bones) and one mesh", len(armatures) == 1 and len(meshes) == 1 and bones == expected_bones,
-          f"armatures {len(armatures)}, meshes {len(meshes)}, bones {bones}")
+    armature = armatures[0] if len(armatures) == 1 else None
+    bones = set(armature.data.bones.keys()) if armature else set()
+    check(f"{character}: .blend has one armature with {EXPECTED_BONES} bones incl. all 30 finger bones",
+          armature is not None and len(bones) == EXPECTED_BONES and set(FINGER_BONES) <= bones,
+          f"armatures {len(armatures)}, bones {len(bones)}, missing fingers {sorted(set(FINGER_BONES) - bones)[:5]}")
+    expected_parts = {".body", ".high-poly", ".eyebrow001", ".eyelashes01"} | {f".{config[key]}" for key in ("hair", "outfit", "shoes") if config[key]}
+    found = {part for part in expected_parts if any(obj.name.endswith(part) for obj in meshes)}
+    rigged = all(obj.parent == armature and any(m.type == "ARMATURE" and m.object == armature for m in obj.modifiers) for obj in meshes)
+    check(f"{character}: .blend has body, eyes, brows, lashes, hair, outfit, shoes, all rigged", found == expected_parts and rigged,
+          f"missing {sorted(expected_parts - found)}, all rigged {rigged}")
     actions = {action.name: action for action in bpy.data.actions}
     check(f"{character}: .blend has one fake-user Action per clip", sorted(actions) == sorted(config["clips"]) and all(action.use_fake_user for action in actions.values()),
           f"actions {[(name, action.use_fake_user) for name, action in actions.items()]}")
-    active = armatures[0].animation_data.action.name if armatures and armatures[0].animation_data and armatures[0].animation_data.action else None
+    active = armature.animation_data.action.name if armature and armature.animation_data and armature.animation_data.action else None
     check(f"{character}: .blend opens with the first clip assigned", active == config["clips"][0], f"active {active}")
     moving = moving_location_curves()
     check(f"{character}: .blend Actions are rotation-only", not moving, f"{moving[:5]}")
     textures = [image for image in bpy.data.images if image.filepath]
-    check(f"{character}: .blend textures are packed", len(textures) == len(config["materials"]) and all(image.packed_file for image in textures),
+    check(f"{character}: .blend textures are packed", bool(textures) and all(image.packed_file for image in textures),
           f"{[(image.name, bool(image.packed_file)) for image in textures]}")
+    if armature:
+        armature.data.pose_position = "REST"
+        bpy.context.view_layer.update()
+        height = body_height(armature)
+        check(f"{character}: body height matches target_height_m", abs(height - config["target_height_m"]) <= 0.01 * config["target_height_m"],
+              f"{height:.3f} m vs {config['target_height_m']} m")
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        evaluated_vertices = 0
+        for obj in meshes:
+            evaluated = obj.evaluated_get(depsgraph)
+            evaluated_vertices += len(evaluated.to_mesh().vertices)
+            evaluated.to_mesh_clear()
 
-    # Combined FBX: bones, one take per clip, rotation-only.
+    # Colour slots: the baked export textures must carry the configured colours.
+    slots = [("top", 1.0, config["outfit"]), ("bottom", 0.0, config["outfit"]), ("shoes", 0.0, config["shoes"])]
+    for slot, region, item in slots:
+        colour = config["materials"][slot]
+        if not item or colour[3] < 0.99:
+            continue
+        obj = next((o for o in meshes if o.name.endswith("." + item)), None)
+        baked = manifest["baked_textures"].get(obj.active_material.name) if obj else None
+        mean = baked_region_colour(obj, baked, region) if baked else None
+        target = Vector(colour[:3])
+        similar = mean is not None and mean.length > 0 and mean.normalized().dot(target.normalized()) > 0.97 and 0.4 < mean.length / target.length < 1.6
+        check(f"{character}: {slot} colour slot shows in the baked texture", similar,
+              f"mean {tuple(round(c, 3) for c in mean) if mean else None} vs target {tuple(colour[:3])}")
+
+    # Combined FBX: bones, one take per clip, rotation-only, textures embedded.
     combined_takes = fbx_takes(Path(manifest["fbx"]))
     clip_of_take = {take.rsplit("|", 1)[-1]: frame_range for take, frame_range in combined_takes.items()}
     check(f"{character}: combined FBX has one take per clip", sorted(clip_of_take) == sorted(config["clips"]), f"takes {sorted(combined_takes)}")
-    armatures, _meshes = import_fbx(Path(manifest["fbx"]))
-    bones = len(armatures[0].data.bones) if armatures else 0
-    check(f"{character}: combined FBX has {expected_bones} bones", bones == expected_bones, f"found {bones}")
+    armatures, fbx_meshes = import_fbx(Path(manifest["fbx"]))
+    bone_count = len(armatures[0].data.bones) if armatures else 0
+    check(f"{character}: combined FBX has {EXPECTED_BONES} bones and {len(meshes)} meshes", bone_count == EXPECTED_BONES and len(fbx_meshes) == len(meshes),
+          f"bones {bone_count}, meshes {len(fbx_meshes)}")
     moving = moving_location_curves()
     check(f"{character}: combined FBX is rotation-only", not moving, f"{moving[:5]}")
+    embedded = [image for image in bpy.data.images if image.packed_file or image.has_data]
+    check(f"{character}: combined FBX embeds a base-colour texture per material", len(embedded) >= len(manifest["baked_textures"]),
+          f"{len(embedded)} images for {len(manifest['baked_textures'])} materials")
 
     if manifest["model_fbx"]:
-        armatures, meshes = import_fbx(Path(manifest["model_fbx"]))
-        bones = len(armatures[0].data.bones) if armatures else 0
-        check(f"{character}: model FBX has {expected_bones} bones and a mesh", bones == expected_bones and bool(meshes), f"bones {bones}, meshes {len(meshes)}")
+        armatures, model_meshes = import_fbx(Path(manifest["model_fbx"]))
+        bone_count = len(armatures[0].data.bones) if armatures else 0
+        check(f"{character}: model FBX has {EXPECTED_BONES} bones and the meshes", bone_count == EXPECTED_BONES and len(model_meshes) == len(meshes),
+              f"bones {bone_count}, meshes {len(model_meshes)}")
         check(f"{character}: model FBX has no takes", not fbx_takes(Path(manifest["model_fbx"])), f"{list(fbx_takes(Path(manifest['model_fbx'])))}")
 
     # Per-clip FBX: armature only, one take named after the clip, same range as the combined take.
@@ -150,69 +217,91 @@ def check_outputs(config_path: Path, output_dir: Path) -> None:
     if manifest["animation_fbx"]:
         bad_contents = []
         for clip, path in manifest["animation_fbx"].items():
-            armatures, meshes = import_fbx(Path(path))
-            if len(armatures) != 1 or meshes:
-                bad_contents.append(f"{clip}: {len(armatures)} armatures, {len(meshes)} meshes")
-            elif len(armatures[0].data.bones) != expected_bones:
+            armatures, clip_meshes = import_fbx(Path(path))
+            if len(armatures) != 1 or clip_meshes:
+                bad_contents.append(f"{clip}: {len(armatures)} armatures, {len(clip_meshes)} meshes")
+            elif len(armatures[0].data.bones) != EXPECTED_BONES:
                 bad_contents.append(f"{clip}: {len(armatures[0].data.bones)} bones")
             elif moving_location_curves():
                 bad_contents.append(f"{clip}: moving location curves")
-        check(f"{character}: per-clip FBX are skeleton-only, {expected_bones} bones, rotation-only", not bad_contents, "; ".join(bad_contents[:5]))
+        check(f"{character}: per-clip FBX are skeleton-only, {EXPECTED_BONES} bones, rotation-only", not bad_contents, "; ".join(bad_contents[:5]))
 
-    # GLB: skinned, and carries modifier-applied geometry. glTF can split
-    # vertices (normals/UV seams) but never merges them, so the GLB must have
-    # at least as many vertices as the evaluated (bevelled) Blender mesh.
+    # GLB: skinned, textured, and carrying the modifier-applied geometry
+    # (glTF can split vertices but never merges them).
     if manifest["preview_glb"]:
-        reset()
-        _armature, mesh, _bones = build_character(config)
-        evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
-        evaluated_vertices = len(evaluated.vertices)
         summary = glb_summary(Path(manifest["preview_glb"]))
-        check(f"{character}: GLB is skinned with {expected_bones} joints", summary["skinned"] and summary["joints"] == [expected_bones], f"{summary}")
+        check(f"{character}: GLB is skinned with {EXPECTED_BONES} joints and has textures", summary["skinned"] and summary["joints"] == [EXPECTED_BONES] and summary["textures"] > 0, f"{summary}")
         check(f"{character}: GLB has modifier-applied geometry", summary["vertices"] >= evaluated_vertices,
-              f"GLB {summary['vertices']} vertices < evaluated mesh {evaluated_vertices}")
+              f"GLB {summary['vertices']} vertices < evaluated meshes {evaluated_vertices}")
 
 
 def front_direction(pose_bone) -> Vector:
-    """World direction the bone's rest-pose 'forward' (+Y, the way the
-    character faces) points to in the current pose."""
+    """World direction the bone's rest-pose 'forward' (the way the character
+    faces, -Y) points to in the current pose."""
     delta = pose_bone.matrix.to_3x3() @ pose_bone.bone.matrix_local.to_3x3().inverted()
-    return (delta @ Vector((0, 1, 0))).normalized()
+    return (delta @ CHARACTER_FRONT).normalized()
 
 
 def elbow_flex_toward_front(pose_bones, side: str) -> float:
     """> 0 when the elbow bends the anatomical way (forearm toward the
     body's front); < 0 when it hyperextends."""
-    upper = pose_bones[f"Forearm.{side}"].head - pose_bones[f"UpperArm.{side}"].head
-    lower = pose_bones[f"Hand.{side}"].head - pose_bones[f"Forearm.{side}"].head
+    upper = pose_bones[f"lowerarm_{side}"].head - pose_bones[f"upperarm_{side}"].head
+    lower = pose_bones[f"hand_{side}"].head - pose_bones[f"lowerarm_{side}"].head
     perpendicular = lower - upper.normalized() * lower.dot(upper.normalized())
     if perpendicular.length < 1e-6:
         return 0.0
-    return perpendicular.normalized().dot(front_direction(pose_bones["Chest"]))
+    return perpendicular.normalized().dot(front_direction(pose_bones["spine_03"]))
 
 
 def check_poses(config_path: Path) -> None:
     clips = builtin_clips()
     reset()
     config = load_config(config_path)
-    armature, mesh, _bones = build_character(config)
-    armature.animation_data_create()
+    armature, meshes, _bones = build_character(config)
+    actions = bake_clips(armature, clips)
+    body = next(obj for obj in meshes if obj.name.endswith(".body"))
+
     for clip_name in ("Idle", "Prone", "Crawl"):
-        bake_pose_action(armature, clip_name, clips[clip_name])
+        armature.animation_data.action = actions[clip_name]
         bpy.context.scene.frame_set(1)
+        bpy.context.view_layer.update()
         pose_bones = armature.pose.bones
-        chest = front_direction(pose_bones["Chest"])
-        head = front_direction(pose_bones["Head"])
+        chest = front_direction(pose_bones["spine_03"])
+        head = front_direction(pose_bones["head"])
         if clip_name == "Idle":
-            check(f"{clip_name}: chest faces forward (+Y)", chest.y > 0.95, f"chest front {tuple(round(c, 2) for c in chest)}")
+            check(f"{clip_name}: chest faces forward (-Y)", chest.y < -0.95, f"chest front {tuple(round(c, 2) for c in chest)}")
             continue
         check(f"{clip_name}: chest faces the ground", chest.z < -0.9, f"chest front {tuple(round(c, 2) for c in chest)}")
-        check(f"{clip_name}: head looks ahead, not up", head.z < 0 and head.y > 0.5, f"head front {tuple(round(c, 2) for c in head)}")
-        flex = min(elbow_flex_toward_front(pose_bones, "L"), elbow_flex_toward_front(pose_bones, "R"))
+        check(f"{clip_name}: head looks ahead, not up", head.z < 0 and head.y < -0.5, f"head front {tuple(round(c, 2) for c in head)}")
+        flex = min(elbow_flex_toward_front(pose_bones, "l"), elbow_flex_toward_front(pose_bones, "r"))
         check(f"{clip_name}: elbows bend the natural way", flex > 0, f"flex {flex:.2f}")
-        evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
-        heights = [(mesh.matrix_world @ vertex.co).z for vertex in evaluated.vertices]
-        print(f"INFO {clip_name} frame 1 mesh height range: {min(heights):.2f}..{max(heights):.2f} m (target_height_m {config['target_height_m']})")
+        evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get()).to_mesh()
+        heights = [(body.matrix_world @ vertex.co).z for vertex in evaluated.vertices]
+        print(f"INFO {clip_name} frame 1 body height range: {min(heights):.2f}..{max(heights):.2f} m (target_height_m {config['target_height_m']})")
+
+    # Retarget accuracy: on every keyed frame of every clip, each arm, hand
+    # and finger bone must point where the authoring bone points (turned to
+    # the character's facing), give or take the deliberate outward tilt.
+    facing = Matrix.Rotation(math.pi, 3, "Z")
+    worst = (0.0, "", 0, "")
+    with Retargeter(armature) as retargeter:
+        for clip_name, clip in clips.items():
+            armature.animation_data.action = actions[clip_name]
+            for frame, pose in clip["poses"].items():
+                for pose_bone in retargeter.source.pose.bones:
+                    pose_bone.rotation_euler = pose.get(pose_bone.name, (0.0, 0.0, 0.0))
+                bpy.context.scene.frame_set(frame)
+                bpy.context.view_layer.update()
+                for source, target in BONE_MAP.items():
+                    if target not in ALIGNED_TARGETS:
+                        continue
+                    wanted = facing @ retargeter.source.pose.bones[source].matrix.to_3x3().col[1]
+                    actual = armature.pose.bones[target].matrix.to_3x3().col[1]
+                    angle = math.degrees(wanted.angle(actual))
+                    if angle > worst[0]:
+                        worst = (angle, clip_name, frame, target)
+    check("retarget: arm/hand/finger directions match the authored clips (all clips, all keys)", worst[0] <= ARM_ABDUCTION_DEG + 1.0,
+          f"worst {worst[0]:.1f} deg at {worst[1]} frame {worst[2]} {worst[3]}")
 
 
 if __name__ == "__main__":

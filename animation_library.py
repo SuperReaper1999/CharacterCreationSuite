@@ -2,9 +2,10 @@
 
 Clips are authored on the main body bones (Hips, Chest, Neck, Head, arms,
 legs, feet) in _authored_clips(). builtin_clips() then fills in the rest of
-the 52-bone rig (Spine/UpperChest, Shoulders, Toes, fingers) from those
+the 52-bone authoring skeleton (Spine/UpperChest, Shoulders, Toes, fingers) from those
 values with _expand_pose(), so the extra joints follow the authored motion
-instead of being keyed by hand in 12 places.
+instead of being keyed by hand in 12 places. retarget.py then transfers
+the result onto the character's MPFB rig.
 """
 
 from __future__ import annotations
@@ -20,8 +21,16 @@ def r(x: float, y: float = 0.0, z: float = 0.0) -> tuple[float, float, float]:
 # Relaxed-hand curl per segment (Proximal, Intermediate, Distal) — curls
 # more at the middle knuckle than the tip, like a hand actually at rest,
 # rather than an equal bend at every joint.
-_FINGER_CURL = (r(12), r(20), r(14))
-_THUMB_CURL = (r(8), r(14), r(10))
+# Degrees. Applied about each finger bone's local Z axis (world +Y on the
+# authoring skeleton, whose palms face the thighs), signed per side so the
+# fingers bend into the palm. (An earlier version bent them about X, which
+# swings the fingertips forward toward the thumb instead.)
+_FINGER_CURL = (12, 20, 14)
+_THUMB_CURL = (8, 14, 10)
+
+
+def _curl(degrees: float, side: str) -> tuple[float, float, float]:
+    return r(0, 0, -degrees if side == "L" else degrees)
 
 
 def clips() -> dict[str, dict[str, Any]]:
@@ -78,9 +87,9 @@ def _expand_pose(pose: dict[str, tuple[float, float, float]]) -> dict[str, tuple
             expanded[f"Toe.{side}"] = tuple(component * 0.15 for component in lower_leg)
         for finger in ("Index", "Middle", "Ring", "Little"):
             for segment, curl in enumerate(_FINGER_CURL, start=1):
-                expanded[f"{finger}{segment}.{side}"] = curl
+                expanded[f"{finger}{segment}.{side}"] = _curl(curl, side)
         for segment, curl in enumerate(_THUMB_CURL, start=1):
-            expanded[f"Thumb{segment}.{side}"] = curl
+            expanded[f"Thumb{segment}.{side}"] = _curl(curl, side)
     return expanded
 
 
