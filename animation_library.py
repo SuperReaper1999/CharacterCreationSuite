@@ -535,14 +535,14 @@ def _more_clips() -> dict[str, dict[str, Any]]:
         return {**_hand("L", shape_left), **_hand("R", shape_right or shape_left)}
 
     seat = {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90)}
-    chair = {**seat, "Chest": r(-4), **arms(((-23.1, 14.2, -5.4), 107.5), ((-23.1, -14.2, 5.5), 107.5)), **hands("resting")}  # solved: hands on the thighs
+    chair = {**seat, "Chest": r(-4), **arms(((-24.3, 14.2, -5.3), 110.8), ((-24.3, -14.2, 5.3), 110.8)), **hands("resting")}  # solved: hands on the thighs
     clips["SitChair"] = {"frames": 60, "loop": True, "poses": {1: chair, 30: _merge(chair, {"Chest": r(-5), "Head": r(-2)}), 60: chair}}
 
     bench = {"UpperLeg.L": r(90), "UpperLeg.R": r(90), "LowerLeg.L": r(-85), "LowerLeg.R": r(-85), "Chest": r(-28), "Head": r(14),
              **arms(((38.9, 6.9, -15.1), 67.7), ((38.9, -6.9, 15.1), 67.7)), **hands("relaxed_open")}  # solved: forearms on the knees, hands in front
     clips["SitBench"] = {"frames": 60, "loop": True, "poses": {1: bench, 30: _merge(bench, {"Chest": r(-29), "Head": r(12, 4)}), 60: bench}}
 
-    typing_base = {**seat, "Chest": r(-6), "Head": r(-12), **arms(((3.2, 8.9, -11.9), 71.9), ((3.2, -8.9, 11.9), 71.9))}  # solved: hands on a desk keyboard
+    typing_base = {**seat, "Chest": r(-6), "Head": r(-12), **arms(((3.2, 7.7, -11.4), 81.3), ((3.2, -7.7, 11.4), 81.3))}  # solved: hands on a desk keyboard
 
     def taps(left_finger, right_finger):
         keys = hands("typing")
@@ -555,9 +555,9 @@ def _more_clips() -> dict[str, dict[str, Any]]:
         13: {**typing_base, **taps("Ring", "Ring")}, 19: {**typing_base, **taps("Index", "Little")}, 25: {**typing_base, **taps("Index", "Middle")}}}
 
     car_seat = {"Chest": r(14), "UpperLeg.L": r(70), "UpperLeg.R": r(70), "LowerLeg.L": r(-45), "LowerLeg.R": r(-45), "Foot.L": r(15), "Foot.R": r(15), **hands("wheel")}
-    drive = {**car_seat, **arms(((9.6, 6.9, -7.3), 69.5), ((9.6, -6.9, 7.3), 69.5))}  # solved: hands at 10 and 2 on a 38 cm wheel
-    steer_left = {**car_seat, **arms(((5.6, -2.7, -12.3), 55.4), ((18.6, -18.2, 12.8), 74.4))}  # solved: wheel turned 45 degrees left
-    steer_right = {**car_seat, **arms(((18.6, 18.2, -12.8), 74.4), ((5.6, 2.7, 12.3), 55.4))}  # solved: wheel turned 45 degrees right
+    drive = {**car_seat, **arms(((21.2, 3.6, -11.0), 52.5), ((21.2, -3.6, 11.0), 52.5))}  # solved: hands at 10 and 2 on a 38 cm wheel
+    steer_left = {**car_seat, **arms(((14.5, -5.0, -15.0), 44.6), ((31.0, -17.5, 11.6), 56.3))}  # solved: wheel turned 45 degrees left
+    steer_right = {**car_seat, **arms(((31.0, 17.5, -11.6), 56.3), ((14.5, 5.1, 15.0), 44.6))}  # solved: wheel turned 45 degrees right
     clips["Drive"] = {"frames": 60, "loop": True, "poses": {1: drive, 30: _merge(drive, {"Head": r(-1, 3)}), 60: drive}}
     clips["DriveSteerLeft"] = {"frames": 30, "loop": True, "poses": {1: steer_left, 30: steer_left}}
     clips["DriveSteerRight"] = {"frames": 30, "loop": True, "poses": {1: steer_right, 30: steer_right}}
@@ -565,11 +565,11 @@ def _more_clips() -> dict[str, dict[str, Any]]:
     lying = {"Hips": r(88), "Head": r(-12), "UpperArm.L": r(0, 0, 15), "UpperArm.R": r(0, 0, -15), "Forearm.L": r(10), "Forearm.R": r(10), **hands("relaxed_open")}
     clips["LieDown"] = {"frames": 60, "loop": True, "poses": {1: lying, 30: _merge(lying, {"Chest": r(1)}), 60: lying}}
 
-    phone_call = {"Head": r(-4, 0, -8), **arms(right=((50.0, 1.4, -9.1), 150.0)), **_hand("R", "phone")}  # solved: phone at the right ear
+    phone_call = {"Head": r(-4, 0, -8), **arms(right=((47.9, 8.0, -8.0), 150.0)), **_hand("R", "phone")}  # solved: phone at the right ear
     clips["PhoneCall"] = {"frames": 90, "loop": True, "poses": {1: phone_call, 45: _merge(phone_call, {"Head": r(-6, 4, -8)}), 90: phone_call}}
 
     def phone_look(thumb_bend):
-        pose = {"Head": r(-28), "Chest": r(-4), **arms(((5.9, 21.5, -17.3), 88.6), ((4.5, -19.2, 13.1), 98.7)), **hands("phone")}  # solved: phone held in front of the chest
+        pose = {"Head": r(-28), "Chest": r(-4), **arms(((15.1, 17.5, -12.3), 80.5), ((14.1, -15.4, 9.3), 89.1)), **hands("phone")}  # solved: phone held in front of the chest
         pose["Thumb3.R"] = _side("R", 0, 0, -thumb_bend)
         return pose
     clips["PhoneLook"] = {"frames": 40, "loop": True, "poses": {1: phone_look(10), 10: phone_look(35), 20: phone_look(10), 30: phone_look(30), 40: phone_look(10)}}
