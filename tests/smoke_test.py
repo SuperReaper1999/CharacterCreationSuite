@@ -20,8 +20,10 @@ inspects the outputs from inside Blender (tests/_blender_checks.py):
   geometry;
 - Prone/Crawl lie face-down with natural elbow bend; Idle faces forward;
 - ground contact: the lowest point stays on the floor every frame;
-- retarget accuracy: every arm, hand and finger bone follows the authored
-  clips on every keyed frame.
+- retarget accuracy: every arm and hand bone follows the authored clips on
+  every keyed frame;
+- hands: the open hand keeps MPFB's natural hand, fingers don't fuse, fists
+  curl fully, the OK sign's thumb and index skin touch.
 
 Needs MPFB and the MakeHuman system assets installed in the Blender used
 (run setup_mpfb.py once).

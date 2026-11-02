@@ -9,9 +9,10 @@ each keyed frame this module:
 1. poses a temporary authoring armature with the clip's rotations;
 2. takes each authoring bone's rotation relative to its rest pose, in
    world space, turned 180 degrees about Z into the character's facing;
-3. applies that rotation to the matching game_engine bone. Arm, hand and
-   finger bones are first aligned to the authoring skeleton's rest
-   direction (arms down, fingers straight), because that is what the
+3. applies that rotation to the matching game_engine bone (fingers and
+   thumbs are the exception, see FINGER_TARGETS). Arm and hand bones are
+   first aligned to the authoring skeleton's rest
+   direction (arms down), because that is what the
    clips assume "rest" looks like; spine, legs, feet, neck and head keep
    their own anatomical rest direction (re-aligning those would distort
    the body's natural curves);
@@ -60,7 +61,17 @@ def _bone_map() -> dict[str, str]:
 BONE_MAP = _bone_map()
 # Target bones re-aligned to the authoring skeleton's rest direction.
 ALIGNED_TARGETS = {target for source, target in BONE_MAP.items()
-                   if source.split(".")[0].rstrip("123") in ("UpperArm", "Forearm", "Hand", *_FINGERS)}
+                   if source.split(".")[0] in ("UpperArm", "Forearm", "Hand")}
+# Finger and thumb bones are not world-transferred. They keep MPFB's own
+# natural rest hand (spread, arch, thumb position) and follow the hand; the
+# clip's finger values are read as anatomy instead (see _finger_rotation):
+#   fingers: local Z = curl into the palm (signed per side, as _curl writes
+#            it), local X = spread toward the thumb side;
+#   thumb:   segment 1 local Z = swing toward the palm, local X (negative) =
+#            swing across toward the little finger; segments 2-3 local Z =
+#            bend.
+# and applied about each MPFB bone's own hinge axes, derived from the hand.
+FINGER_TARGETS = {target: source for source, target in BONE_MAP.items() if source.split(".")[0].rstrip("123") in _FINGERS}
 # Authoring space faces +Y, MPFB faces -Y: a half turn about Z maps one onto the other.
 _FACING = Matrix.Rotation(math.pi, 3, "Z")
 
@@ -126,6 +137,7 @@ class Retargeter:
         self.target_rest = {bone.name: bone.matrix_local.to_3x3() for bone in self.target.data.bones}
         self.order = _hierarchy_order(self.target)
         self.source_for = {target: source for source, target in BONE_MAP.items()}
+        self.finger_axes = self._finger_axes()
         # Aligned rest frames, computed down the hierarchy: each aligned
         # bone first moves rigidly with its (already aligned) parent, then
         # swings about its head to point the way the authoring bone points.
@@ -145,6 +157,53 @@ class Retargeter:
             elif name in self.source_for:
                 self.alignment[name] = Matrix.Identity(3)
         return self
+
+    def _finger_axes(self) -> dict[str, dict[str, Vector]]:
+        """Per finger/thumb bone, its hinge axes in its own rest-local frame,
+        from the character's rest hand: palm normal n (out of the palm),
+        `across` (pinky -> index, toward the thumb side) and, for the thumb,
+        `toward_pinky` (thumb base -> little finger base)."""
+        bones = self.target.data.bones
+        axes: dict[str, dict[str, Vector]] = {}
+        for suffix, sign in (("l", 1.0), ("r", -1.0)):
+            if f"hand_{suffix}" not in bones:
+                continue
+            head = lambda name: bones[f"{name}_{suffix}"].head_local
+            direction = (head("middle_01") - head("hand")).normalized()
+            across = (head("index_01") - head("pinky_01")).normalized()
+            normal = direction.cross(across).normalized() * sign
+            toward_pinky = (head("pinky_01") - head("thumb_01")).normalized()
+            for target, source in FINGER_TARGETS.items():
+                if not target.endswith("_" + suffix) or target not in bones:
+                    continue
+                rest = self.target_rest[target]
+                y = rest.col[1].normalized()
+                to_local = rest.inverted()
+
+                def hinge(toward: Vector) -> Vector:
+                    """Axis about which a positive rotation swings the bone toward `toward`."""
+                    perpendicular = (toward - y * y.dot(toward)).normalized()
+                    return (to_local @ y.cross(perpendicular)).normalized()
+
+                if source.startswith("Thumb"):
+                    axes[target] = {"palm": hinge(normal), "across": hinge(toward_pinky), "bend": hinge(toward_pinky)}
+                else:
+                    axes[target] = {"curl": hinge(normal), "spread": hinge(across)}
+        return axes
+
+    def _finger_rotation(self, target: str, source: str, euler) -> Matrix:
+        """Local rotation of a finger/thumb bone from the clip's anatomical
+        values (see FINGER_TARGETS)."""
+        x, _y, z = euler
+        inward = -z if source.endswith(".L") else z  # _curl / _side write left as -Z, right as +Z
+        axes = self.finger_axes.get(target)
+        if axes is None:
+            return Matrix.Identity(3)
+        if "curl" in axes:
+            return Matrix.Rotation(x, 3, axes["spread"]) @ Matrix.Rotation(inward, 3, axes["curl"])
+        if source.startswith("Thumb1"):
+            return Matrix.Rotation(-x, 3, axes["across"]) @ Matrix.Rotation(inward, 3, axes["palm"])
+        return Matrix.Rotation(inward, 3, axes["bend"])
 
     def __exit__(self, *exc):
         data = self.source.data
@@ -170,6 +229,8 @@ class Retargeter:
             source_name = self.source_for.get(name)
             if source_name is None:
                 desired[name] = follow
+            elif name in FINGER_TARGETS:
+                desired[name] = follow @ self._finger_rotation(name, source_name, pose.get(source_name, (0.0, 0.0, 0.0)))
             else:
                 delta = source_pose[source_name] @ self.source_rest[source_name].inverted()
                 desired[name] = _FACING @ delta @ _FACING.inverted() @ self.alignment[name] @ rest

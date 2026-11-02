@@ -300,8 +300,61 @@ def check_poses(config_path: Path) -> None:
         check(f"ground contact: {clip_name} stays on the floor every frame, Root moves only vertically", worst <= 0.005 and sideways <= 1e-4,
               f"lowest point off the floor by up to {worst * 100:.1f} cm, sideways offset {sideways:.5f}")
 
-    # Retarget accuracy: on every keyed frame of every clip, each arm, hand
-    # and finger bone must point where the authoring bone points (turned to
+    # Hands. An open hand keeps MPFB's own sculpted hand (no finger or thumb
+    # bone rotated); fingers don't fuse (skin between neighbouring middle
+    # segments stays apart); a fist curls every fingertip back past its
+    # knuckle; the OK sign's thumb and index skin actually touch. The first
+    # two checks fail on the earlier retarget that forced fingers straight
+    # and parallel (gaps of 2-7 mm, open-hand rotations up to 66 degrees).
+    import numpy
+    pose_bones = armature.pose.bones
+    hand_bones = [name for name in pose_bones.keys() if name.endswith("_r") and name.split("_")[0] in ("thumb", "index", "middle", "ring", "pinky")]
+
+    def at(clip_name, frame):
+        armature.animation_data.action = actions[clip_name]
+        bpy.context.scene.frame_set(frame)
+        bpy.context.view_layer.update()
+
+    def skin():
+        hidden = [modifier for modifier in body.modifiers if modifier.type in ("MASK", "SUBSURF") and modifier.show_viewport]
+        for modifier in hidden:
+            modifier.show_viewport = False
+        evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        mesh = evaluated.to_mesh()
+        coordinates = numpy.empty(len(mesh.vertices) * 3, dtype=numpy.float32)
+        mesh.vertices.foreach_get("co", coordinates)
+        evaluated.to_mesh_clear()
+        for modifier in hidden:
+            modifier.show_viewport = True
+        return coordinates.reshape(-1, 3)
+
+    def group(coordinates, name):
+        index = body.vertex_groups[name].index
+        return coordinates[[vertex.index for vertex in body.data.vertices if any(g.group == index and g.weight > 0.5 for g in vertex.groups)]]
+
+    def skin_gap(coordinates, a, b):
+        first, second = group(coordinates, a), group(coordinates, b)
+        return float(numpy.sqrt(((first[:, None, :] - second[None, :, :]) ** 2).sum(-1)).min())
+
+    at("Wave", 17)
+    largest = max(math.degrees(pose_bones[name].rotation_quaternion.angle) for name in hand_bones)
+    check("hands: Wave open hand keeps MPFB's natural hand (finger/thumb bones at rest)", largest <= 1.0, f"a finger bone is rotated {largest:.1f} deg")
+    for clip_name, frame in (("Wave", 17), ("Idle", 1)):
+        at(clip_name, frame)
+        coordinates = skin()
+        gaps = [skin_gap(coordinates, f"{a}_02_r", f"{b}_02_r") for a, b in (("index", "middle"), ("middle", "ring"), ("ring", "pinky"))]
+        check(f"hands: {clip_name} fingers not fused (skin between neighbours >= 6 mm)", min(gaps) >= 0.006, f"gaps {[round(g * 1000, 1) for g in gaps]} mm")
+    at("Punch", 1)
+    wrist = pose_bones["hand_r"].head
+    loose = [finger for finger in ("index", "middle", "ring", "pinky")
+             if (pose_bones[f"{finger}_03_r"].tail - wrist).length >= (pose_bones[f"{finger}_01_r"].head - wrist).length]
+    check("hands: Punch fist curls every fingertip back past its knuckle", not loose, f"not curled: {loose}")
+    at("OKSign", 20)
+    gap = skin_gap(skin(), "index_03_r", "thumb_03_r")
+    check("hands: OKSign thumb and index fingertips touch (skin within 3 mm)", gap <= 0.003, f"gap {gap * 1000:.1f} mm")
+
+    # Retarget accuracy: on every keyed frame of every clip, each arm and
+    # hand bone must point where the authoring bone points (turned to
     # the character's facing), give or take the deliberate outward tilt.
     facing = Matrix.Rotation(math.pi, 3, "Z")
     worst = (0.0, "", 0, "")
@@ -321,7 +374,7 @@ def check_poses(config_path: Path) -> None:
                     angle = math.degrees(wanted.angle(actual))
                     if angle > worst[0]:
                         worst = (angle, clip_name, frame, target)
-    check("retarget: arm/hand/finger directions match the authored clips (all clips, all keys)", worst[0] <= ARM_ABDUCTION_DEG + 1.0,
+    check("retarget: arm and hand directions match the authored clips (all clips, all keys)", worst[0] <= ARM_ABDUCTION_DEG + 1.0,
           f"worst {worst[0]:.1f} deg at {worst[1]} frame {worst[2]} {worst[3]}")
 
 

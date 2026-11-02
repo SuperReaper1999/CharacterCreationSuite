@@ -243,31 +243,35 @@ def _side(side: str, x: float, y: float, z: float) -> tuple[float, float, float]
 # with _curl (into the palm). _hand turns a shape into finger-bone keys.
 _FINGERS = ("Index", "Middle", "Ring", "Little")
 _STRAIGHT = (0, 0, 0)
-_CURLED = (80, 95, 60)
-# Thumb poses are full (x, y, z) rotations in degrees per segment, written
-# for the left hand and mirrored for the right (see _side). Curling a thumb
-# about Z alone only swings it sideways out of the palm; to fold it over
-# curled fingers it also swings back toward the little finger (-X). These
-# values were picked by rendering candidates from three angles.
+# Tight curl for fists. Checked by rendering: at 80/95/60 a fingertip pushes
+# through the palm and its nail shows on the back of the hand.
+_CURLED = (70, 90, 50)
+# Thumb poses are (x, y, z) degrees per segment, written for the left hand
+# and mirrored for the right (see _side). retarget.py reads them as anatomy
+# on the character's own thumb: segment 1 -Z swings it toward the palm and
+# -X across toward the little finger; segments 2-3 -Z bend it. Values were
+# found by searching on the MPFB character for thumb-tip skin resting on the
+# curled fingers (or, for "ok", on the index tip) with the least overlap,
+# then checked by rendering.
 _THUMB_OPEN = ((0, 0, 0), (0, 0, 0), (0, 0, 0))
-_THUMB_TUCKED = ((-70, 0, -20), (0, 0, -40), (0, 0, -30))
+_THUMB_TUCKED = ((-50, 0, 0), (0, 0, -20), (0, 0, -40))  # across the index/middle middle segments
 _HAND_SHAPES = {
     "open": {"fingers": {finger: _STRAIGHT for finger in _FINGERS}, "thumb": _THUMB_OPEN},
     "fist": {"fingers": {finger: _CURLED for finger in _FINGERS}, "thumb": _THUMB_TUCKED},
     "point": {"fingers": {"Index": _STRAIGHT, "Middle": _CURLED, "Ring": _CURLED, "Little": _CURLED}, "thumb": _THUMB_TUCKED},
     "thumbs_up": {"fingers": {finger: _CURLED for finger in _FINGERS}, "thumb": ((0, 0, 10), (0, 0, 0), (0, 0, 0))},
-    "middle_finger": {"fingers": {"Index": _CURLED, "Middle": _STRAIGHT, "Ring": _CURLED, "Little": _CURLED}, "thumb": _THUMB_TUCKED},
-    "grip": {"fingers": {"Index": (25, 25, 15), "Middle": (70, 85, 55), "Ring": (70, 85, 55), "Little": (70, 85, 55)}, "thumb": ((-45, 0, -20), (0, 0, -30), (0, 0, -20))},
+    "middle_finger": {"fingers": {"Index": _CURLED, "Middle": _STRAIGHT, "Ring": _CURLED, "Little": _CURLED}, "thumb": ((-50, 0, 0), (0, 0, 0), (0, 0, -40))},
+    "grip": {"fingers": {"Index": (25, 25, 15), "Middle": (70, 85, 55), "Ring": (70, 85, 55), "Little": (70, 85, 55)}, "thumb": _THUMB_TUCKED},
     "handshake": {"fingers": {finger: (30, 30, 20) for finger in _FINGERS}, "thumb": ((0, 0, 0), (0, 0, -10), (0, 0, -10))},
     # V sign: index and middle up and fanned apart, the others held down by the thumb.
     "peace": {"fingers": {"Index": _STRAIGHT, "Middle": _STRAIGHT, "Ring": _CURLED, "Little": _CURLED}, "thumb": _THUMB_TUCKED,
               "spread": {"Index": 10, "Middle": -10}},
     # Thumb and index tips meeting in a ring, the other three up and fanned.
-    # The index/thumb values came from a numeric search on the MPFB character:
-    # of the candidates whose fingertip skin touches (under 1 mm apart), the
-    # one with the least overlap (bone tips furthest apart, 2.5 cm).
-    "ok": {"fingers": {"Index": (50, 60, 40), "Middle": (5, 8, 5), "Ring": (8, 10, 6), "Little": (10, 12, 8)},
-           "thumb": ((-45, 0, -20), (0, 0, -35), (0, 0, -10)), "spread": {"Middle": -3, "Ring": -8, "Little": -14}},
+    # Index/thumb from a numeric search on the MPFB character: of the
+    # candidates whose fingertip skin touches (under 1 mm), the one with the
+    # least overlap.
+    "ok": {"fingers": {"Index": (40, 55, 40), "Middle": (5, 8, 5), "Ring": (8, 10, 6), "Little": (10, 12, 8)},
+           "thumb": ((-10, 0, -30), (0, 0, -30), (0, 0, -30)), "spread": {"Middle": -3, "Ring": -8, "Little": -14}},
 }
 
 
