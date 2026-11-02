@@ -353,6 +353,75 @@ def check_poses(config_path: Path) -> None:
     gap = skin_gap(skin(), "index_03_r", "thumb_03_r")
     check("hands: OKSign thumb and index fingertips touch (skin within 3 mm)", gap <= 0.003, f"gap {gap * 1000:.1f} mm")
 
+    # Arms. No hand/forearm skin inside the torso, head or legs on any keyed
+    # frame of any clip; two-handed clips keep both hands on the handle;
+    # swing wind-ups don't cross the arms; raised-hand gestures sit beside
+    # the face, not in front of it.
+    from mathutils import kdtree
+    group_names = {group.index: group.name for group in body.vertex_groups}
+    skin_index = body.vertex_groups["body"].index  # MPFB: real skin (the rest are helper shells)
+    body_parts = ("spine", "pelvis", "neck", "head", "thigh", "calf", "clavicle", "upperarm", "lowerarm", "hand", "thumb", "index", "middle", "ring", "pinky", "foot", "ball")
+    dominant = []
+    for vertex in body.data.vertices:
+        if not any(g.group == skin_index and g.weight > 0.5 for g in vertex.groups):
+            dominant.append("")
+            continue
+        best = max((g for g in vertex.groups if group_names.get(g.group, "").split("_")[0] in body_parts), key=lambda g: g.weight, default=None)
+        dominant.append(group_names[best.group] if best else "")
+    arm_vertices = [i for i, name in enumerate(dominant) if name.split("_")[0] in ("lowerarm", "hand", "thumb", "index", "middle", "ring", "pinky")][::2]
+    trunk_vertices = [i for i, name in enumerate(dominant) if name.split("_")[0] in ("spine", "pelvis", "neck", "head", "thigh", "calf")]
+
+    def arm_penetration() -> float:
+        hidden = [modifier for modifier in body.modifiers if modifier.type in ("MASK", "SUBSURF") and modifier.show_viewport]
+        for modifier in hidden:
+            modifier.show_viewport = False
+        evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        mesh = evaluated.to_mesh()
+        coordinates = numpy.empty(len(mesh.vertices) * 3, dtype=numpy.float32)
+        mesh.vertices.foreach_get("co", coordinates)
+        normals = numpy.empty(len(mesh.vertices) * 3, dtype=numpy.float32)
+        mesh.vertices.foreach_get("normal", normals)
+        evaluated.to_mesh_clear()
+        for modifier in hidden:
+            modifier.show_viewport = True
+        coordinates, normals = coordinates.reshape(-1, 3), normals.reshape(-1, 3)
+        tree = kdtree.KDTree(len(trunk_vertices))
+        for k, i in enumerate(trunk_vertices):
+            tree.insert(coordinates[i], k)
+        tree.balance()
+        deepest = 0.0
+        for i in arm_vertices:
+            point = Vector(coordinates[i])
+            _location, k, distance = tree.find(point)
+            j = trunk_vertices[k]
+            inside = (point - Vector(coordinates[j])).dot(Vector(normals[j]))
+            if inside < -0.005 and distance < 0.05:
+                deepest = max(deepest, -inside)
+        return deepest
+
+    worst = (0.0, "", 0)
+    for clip_name, clip in clips.items():
+        for frame in sorted(clip["poses"]):
+            at(clip_name, frame)
+            depth = arm_penetration()
+            if depth > worst[0]:
+                worst = (depth, clip_name, frame)
+    check("arms: no hand/forearm inside the body on any keyed frame of any clip", worst[0] == 0.0, f"{worst[0] * 100:.1f} cm at {worst[1]} frame {worst[2]}")
+    for clip_name, frames, limit in (("MeleeAttack", (8, 15, 22), 0.30), ("HarvestSwing", (9, 16, 24), 0.30), ("CrouchWalkRifle", (1, 16), 0.45)):
+        gaps = []
+        for frame in frames:
+            at(clip_name, frame)
+            gaps.append((pose_bones["hand_l"].head - pose_bones["hand_r"].head).length)
+        check(f"arms: {clip_name} keeps both hands on the handle (<= {limit * 100:.0f} cm apart)", max(gaps) <= limit, f"gaps {[round(g * 100) for g in gaps]} cm")
+    for clip_name, frame in (("MeleeAttack", 8), ("HarvestSwing", 9)):
+        at(clip_name, frame)
+        crossed = pose_bones["hand_l"].head.x < pose_bones["hand_r"].head.x - 0.02  # the character's left is +X
+        check(f"arms: {clip_name} wind-up doesn't cross the arms", not crossed, "left hand is right of the right hand")
+    for clip_name in ("MiddleFinger", "Peace", "OKSign"):
+        at(clip_name, 20)
+        lateral = abs(pose_bones["middle_01_r"].head.x - pose_bones["head"].head.x)
+        check(f"arms: {clip_name} hand is beside the face, not in front of it (>= 20 cm out)", lateral >= 0.20, f"{lateral * 100:.0f} cm")
+
     # Retarget accuracy: on every keyed frame of every clip, each arm and
     # hand bone must point where the authoring bone points (turned to
     # the character's facing), give or take the deliberate outward tilt.

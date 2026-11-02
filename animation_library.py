@@ -117,12 +117,14 @@ def _authored_clips() -> dict[str, dict[str, Any]]:
     # see Crawl's comment below for when that stops being true). Arms hold
     # a fixed two-handed rifle-ready pose, reusing MeleeAttack's proven
     # extended-arm values, since a held weapon shouldn't swing with the gait.
+    # Upper arms solved on the MPFB character for a 42 cm hand gap (support
+    # hand forward on the handguard), as for MeleeAttack below.
     crouch_walk = {}
     for frame, phase in ((1, 1), (9, 0), (16, -1), (24, 0), (31, 1)):
         crouch_walk[frame] = {
             "Chest": r(-6),
-            "UpperArm.L": r(70, -8, 10), "Forearm.L": r(18),
-            "UpperArm.R": r(78, 8, -10), "Forearm.R": r(16),
+            "UpperArm.L": r(71.4, 1.6, 6.6), "Forearm.L": r(18),
+            "UpperArm.R": r(79.6, -2.0, -8.0), "Forearm.R": r(16),
             "UpperLeg.L": r(45 + 14 * phase), "UpperLeg.R": r(45 - 14 * phase),
             "LowerLeg.L": r(-80 - 12 * phase), "LowerLeg.R": r(-80 + 12 * phase),
             "Foot.L": r(35 + 8 * phase), "Foot.R": r(35 - 8 * phase),
@@ -149,22 +151,31 @@ def _authored_clips() -> dict[str, dict[str, Any]]:
         "Idle": {"frames": 60, "loop": True, "poses": {1: {}, 30: {"Chest": r(1), "Head": r(-1)}, 60: {}}},
         "Run": {"frames": 31, "loop": True, "poses": run},
         "Jump": {"frames": 46, "loop": False, "poses": {1: {}, 9: {"UpperLeg.L": r(-25), "UpperLeg.R": r(-25), "LowerLeg.L": r(35), "LowerLeg.R": r(35), "UpperArm.L": r(-25), "UpperArm.R": r(-25)}, 19: {"UpperLeg.L": r(12), "UpperLeg.R": r(12), "LowerLeg.L": r(-10), "LowerLeg.R": r(-10), "UpperArm.L": r(65), "UpperArm.R": r(65)}, 33: {"UpperLeg.L": r(8), "UpperLeg.R": r(8), "UpperArm.L": r(25), "UpperArm.R": r(25)}, 46: {}}},
-        # A deliberate two-handed overhead heavy strike; both arms stay
-        # involved throughout.
+        # A deliberate two-handed overhead heavy strike: wind-up with the
+        # tool raised overhead (frame 8; the original swung both arms straight
+        # back behind the body at shoulder height, which can't hold a handle),
+        # strike down in front (15), recover (22). The wind-up was picked by a
+        # search on the MPFB character for no arm-into-head contact with the
+        # hands under 30 cm apart and the arms not crossing (raised past the
+        # shoulder, a +Z "outward" value crosses the arms over the face);
+        # HarvestSwing's wind-up (9) likewise. Upper-arm values on frames
+        # 15/22 (and HarvestSwing 16/24) were solved on the MPFB character by swinging
+        # each upper arm toward the midline until the hands are 25 cm apart,
+        # as on one handle; the original values left them 60-90 cm apart.
         "MeleeAttack": {"frames": 30, "loop": False, "poses": {
             1: {},
-            8: {"Chest": r(8, -18), "UpperArm.L": r(-72, 8, 16), "Forearm.L": r(-48, 0, -8), "UpperArm.R": r(-78, -10, -16), "Forearm.R": r(-52, 0, 8)},
-            15: {"Chest": r(-18, 22), "UpperArm.L": r(72, -8, 10), "Forearm.L": r(22), "UpperArm.R": r(78, 8, -10), "Forearm.R": r(18)},
-            22: {"Chest": r(-6, 5), "UpperArm.L": r(22, 0, 4), "Forearm.L": r(12), "UpperArm.R": r(26, 0, -4), "Forearm.R": r(12)},
+            8: {"Chest": r(10, -18), "UpperArm.L": r(150, 0, -8), "Forearm.L": r(30), "UpperArm.R": r(155, 0, 8), "Forearm.R": r(25)},
+            15: {"Chest": r(-18, 22), "UpperArm.L": r(74.4, 11.2, 4.2), "Forearm.L": r(22), "UpperArm.R": r(80.8, -11.6, -6.3), "Forearm.R": r(18)},
+            22: {"Chest": r(-6, 5), "UpperArm.L": r(21.2, 7.9, -15.7), "Forearm.L": r(12), "UpperArm.R": r(25.1, -9.2, 15.1), "Forearm.R": r(12)},
             30: {},
         }},
         # A controlled two-handed downward tool stroke. Contact is frame 16
         # (0.5 seconds at 30fps).
         "HarvestSwing": {"frames": 32, "loop": False, "poses": {
             1: {},
-            9: {"Chest": r(6, -14), "UpperArm.L": r(-58, 12, 20), "Forearm.L": r(-44, 0, -12), "UpperArm.R": r(-72, -12, -18), "Forearm.R": r(-54, 0, 10)},
-            16: {"Chest": r(-14, 18), "UpperArm.L": r(58, -10, 14), "Forearm.L": r(18, 0, 4), "UpperArm.R": r(76, 10, -12), "Forearm.R": r(16, 0, -4)},
-            24: {"Chest": r(-5, 4), "UpperArm.L": r(18, 0, 5), "Forearm.L": r(10), "UpperArm.R": r(24, 0, -5), "Forearm.R": r(12)},
+            9: {"Chest": r(8, -14), "UpperArm.L": r(140, 0, -8), "Forearm.L": r(30), "UpperArm.R": r(145, 0, 8), "Forearm.R": r(25)},
+            16: {"Chest": r(-14, 18), "UpperArm.L": r(60.9, 15.1, -0.6), "Forearm.L": r(18, 0, 4), "UpperArm.R": r(80.5, -18.2, -6.2), "Forearm.R": r(16, 0, -4)},
+            24: {"Chest": r(-5, 4), "UpperArm.L": r(23.3, 6.8, -16.3), "Forearm.L": r(10), "UpperArm.R": r(29.2, -9.0, 15.5), "Forearm.R": r(12)},
             32: {},
         }},
         "Fire": {"frames": 12, "loop": False, "poses": {1: {}, 3: {"UpperArm.R": r(-18), "Forearm.R": r(-12), "Chest": r(4)}, 12: {}}},
@@ -320,6 +331,9 @@ def _cycle(keys: tuple[int, ...], poses: list[dict]) -> dict[int, dict]:
     return dict(zip(keys, poses))
 
 
+_RAISED_UPPER_ARM_R = r(41.9, 21.6, -30.9)
+
+
 def _more_clips() -> dict[str, dict[str, Any]]:
     """Clips added after the original 12. Same conventions as above
     (authoring skeleton faces +Y): +X on UpperArm/Forearm/UpperLeg swings
@@ -366,6 +380,9 @@ def _more_clips() -> dict[str, dict[str, Any]]:
         {"UpperLeg.R": r(0, 0, -14), "UpperLeg.L": r(0, 0, 10), "LowerLeg.L": r(-4), "LowerLeg.R": r(-4), "Forearm.L": r(10), "Forearm.R": r(10)},
         {"UpperLeg.L": r(10, 0, 4), "LowerLeg.L": r(-25), "Foot.L": r(10), "UpperLeg.R": r(0, 0, -8), "LowerLeg.R": r(-8), "Chest": r(0, 0, -3), "Forearm.L": r(10), "Forearm.R": r(10)},
     ]
+    # Arms held 8 degrees out so the hand clears the thigh as the leg swings
+    # out (measured: the right hand sank ~1 cm into the thigh without it).
+    strafe = [{**pose, "UpperArm.L": r(0, 0, 8), "UpperArm.R": r(0, 0, -8)} for pose in strafe]
     clips["StrafeRight"] = {"frames": 33, "loop": True, "poses": _cycle((1, 9, 17, 25, 33), [*strafe, strafe[0]])}
     clips["StrafeLeft"] = {"frames": 33, "loop": True, "poses": _cycle((1, 9, 17, 25, 33), [_mirror(p) for p in (*strafe, strafe[0])])}
 
@@ -381,20 +398,24 @@ def _more_clips() -> dict[str, dict[str, Any]]:
     clips["ZombieWalk"] = {"frames": 49, "loop": True, "poses": _cycle((1, 13, 25, 37, 49), [*zombie, zombie[0]])}
 
     # --- Hand gestures (right hand) ---------------------------------------
+    # Raised-hand gestures (MiddleFinger, Peace, OKSign) share this upper arm:
+    # forward 50 degrees, then swung 30 degrees out from the midline, so the
+    # hand sits beside the face (26 cm out from its centre line, measured on
+    # the MPFB character) instead of in front of it.
     rest = {}
     thumbs = {"UpperArm.R": r(35, 0, -5), "Forearm.R": r(85), **_hand("R", "thumbs_up")}
     clips["ThumbsUp"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: thumbs, 40: thumbs, 50: rest}}
 
     # Forearm raised, then turned 80 degrees about its own length (split
     # between forearm and wrist) so the back of the hand faces forward.
-    middle = {"UpperArm.R": r(50, 0, -10), "Forearm.R": _compose(("x", 100), ("y", 40)), "Hand.R": r(0, 40, 0), **_hand("R", "middle_finger"), "Head": r(-3, 0, -5)}
+    middle = {"UpperArm.R": _RAISED_UPPER_ARM_R, "Forearm.R": _compose(("x", 100), ("y", 40)), "Hand.R": r(0, 40, 0), **_hand("R", "middle_finger"), "Head": r(-3, 0, -5)}
     clips["MiddleFinger"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: middle, 40: middle, 50: rest}}
 
     # Raised hand turned about the forearm (split between forearm and wrist):
     # Peace with the palm toward the viewer, OK with the thumb side toward
     # the viewer so the ring is seen face-on.
     def raised(shape, twist):
-        return {"UpperArm.R": r(50, 0, -10), "Forearm.R": _compose(("x", 100), ("y", twist / 2)), "Hand.R": r(0, twist / 2, 0), **_hand("R", shape)}
+        return {"UpperArm.R": _RAISED_UPPER_ARM_R, "Forearm.R": _compose(("x", 100), ("y", twist / 2)), "Hand.R": r(0, twist / 2, 0), **_hand("R", shape)}
     peace, ok = raised("peace", -80), raised("ok", -30)
     clips["Peace"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: peace, 40: peace, 50: rest}}
     clips["OKSign"] = {"frames": 50, "loop": False, "poses": {1: rest, 10: ok, 40: ok, 50: rest}}
@@ -475,7 +496,7 @@ def _more_clips() -> dict[str, dict[str, Any]]:
 
     # --- Interaction ------------------------------------------------------
     crouch_reach = {"UpperLeg.L": r(75), "UpperLeg.R": r(65), "LowerLeg.L": r(-110), "LowerLeg.R": r(-100), "Foot.L": r(35), "Foot.R": r(35),
-                    "Chest": r(-45), "Head": r(-15), "UpperArm.R": r(55, 0, 5), "Forearm.R": r(10), "UpperArm.L": r(20, 0, 10), "Forearm.L": r(40)}
+                    "Chest": r(-45), "Head": r(-15), "UpperArm.R": r(55, 0, -12), "Forearm.R": r(10), "UpperArm.L": r(20, 0, 10), "Forearm.L": r(40)}
     grab = _merge(crouch_reach, _hand("R", "fist"))
     holding = {"UpperArm.R": r(25, 0, 5), "Forearm.R": r(70), **_hand("R", "fist")}
     clips["PickUp"] = {"frames": 40, "loop": False, "poses": {1: rest, 14: _merge(crouch_reach, _hand("R", "open")), 18: grab, 32: holding, 40: holding}}

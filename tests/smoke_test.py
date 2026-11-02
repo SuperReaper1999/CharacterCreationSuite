@@ -23,7 +23,10 @@ inspects the outputs from inside Blender (tests/_blender_checks.py):
 - retarget accuracy: every arm and hand bone follows the authored clips on
   every keyed frame;
 - hands: the open hand keeps MPFB's natural hand, fingers don't fuse, fists
-  curl fully, the OK sign's thumb and index skin touch.
+  curl fully, the OK sign's thumb and index skin touch;
+- arms: no hand/forearm inside the body on any keyed frame of any clip;
+  two-handed clips keep both hands on the handle; swing wind-ups don't
+  cross the arms; raised-hand gestures sit beside the face.
 
 Needs MPFB and the MakeHuman system assets installed in the Blender used
 (run setup_mpfb.py once).

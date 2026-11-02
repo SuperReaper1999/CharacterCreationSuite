@@ -78,15 +78,23 @@ _FACING = Matrix.Rotation(math.pi, 3, "Z")
 
 # The authoring skeleton's arms hang straight down from wide-set shoulders.
 # MPFB shoulders sit closer to the body, so straight-down arms would pass
-# through the hips; tilting the whole arm chain this far outward (about the
-# character's front-back axis) gives a natural relaxed hang instead.
+# through the hips; the whole arm chain is tilted this far outward (about the
+# character's front-back axis) while the arm hangs. The tilt fades out as the
+# upper arm leaves the hanging position (full when pointing down along the
+# torso, none once at right angles to it or raised): with the arms reaching forward it would
+# only splay the hands apart (in two-handed swings by ~20 cm).
 ARM_ABDUCTION_DEG = 10.0
 
 
-def _arm_abduction(head) -> Matrix:
-    """Outward tilt for an arm bone on the character's left (+X) or right (-X)."""
-    side = 1.0 if head.x >= 0 else -1.0
-    return Matrix.Rotation(-side * math.radians(ARM_ABDUCTION_DEG), 3, "Y")
+def _arm_side(head) -> float:
+    """+1 for a bone on the character's left (+X), -1 for its right."""
+    return 1.0 if head.x >= 0 else -1.0
+
+
+def _arm_abduction(side: float, weight: float = 1.0, axis: Vector = Vector((0.0, 1.0, 0.0))) -> Matrix:
+    """Outward tilt for the character's left (+1) or right (-1) arm, about the
+    torso's front-back axis (world Y at rest; it turns with the torso)."""
+    return Matrix.Rotation(-side * math.radians(ARM_ABDUCTION_DEG) * weight, 3, axis)
 
 
 def _hierarchy_order(armature) -> list[Any]:
@@ -151,7 +159,7 @@ class Retargeter:
             if name in ALIGNED_TARGETS:
                 parent = bone.parent.name
                 carried = aligned[parent] @ self.target_rest[parent].inverted() @ rest if parent in aligned else rest
-                wanted = _arm_abduction(self.target.data.bones[name].head_local) @ _FACING @ self.source_rest[self.source_for[name]].col[1]
+                wanted = _FACING @ self.source_rest[self.source_for[name]].col[1]
                 aligned[name] = carried.col[1].rotation_difference(wanted).to_matrix() @ carried
                 self.alignment[name] = aligned[name] @ rest.inverted()
             elif name in self.source_for:
@@ -229,6 +237,17 @@ class Retargeter:
             source_name = self.source_for.get(name)
             if source_name is None:
                 desired[name] = follow
+            elif name in ALIGNED_TARGETS:
+                delta = source_pose[source_name] @ self.source_rest[source_name].inverted()
+                side = _arm_side(bone.head_local)
+                upper_arm = source_pose["UpperArm." + ("L" if side > 0 else "R")].col[1]
+                torso_up = source_pose["UpperChest"].col[1]
+                # 1 hanging along the torso, 0 once at right angles to it or raised
+                # (relative to the torso, so lying poses like Prone still count as hanging).
+                hanging = max(0.0, -upper_arm.dot(torso_up))
+                torso_turn = _FACING @ (source_pose["UpperChest"] @ self.source_rest["UpperChest"].inverted()) @ _FACING.inverted()
+                tilt = _arm_abduction(side, hanging, torso_turn @ Vector((0.0, 1.0, 0.0)))
+                desired[name] = tilt @ _FACING @ delta @ _FACING.inverted() @ self.alignment[name] @ rest
             elif name in FINGER_TARGETS:
                 desired[name] = follow @ self._finger_rotation(name, source_name, pose.get(source_name, (0.0, 0.0, 0.0)))
             else:
