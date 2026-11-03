@@ -15,7 +15,7 @@ BUILTIN_CLIPS = (
     "Wave", "Point", "ThumbsUp", "MiddleFinger", "Peace", "OKSign", "Handshake", "Talk", "PickUp", "Interact",
     "ZombieWalk", "ZombieAttack",
     "SitChair", "SitBench", "SitTyping", "Drive", "DriveSteerLeft", "DriveSteerRight", "LieDown",
-    "PhoneCall", "PhoneLook", "Drink", "CarryIdle", "CarryWalk", "OpenDoor", "PullLever", "Kneel", "ClimbLadder", "Fall", "Land",
+    "PhoneCall", "PhoneLook", "Drink", "CarryIdle", "CarryWalk", "OpenDoor", "PullLever", "Kneel", "ClimbLadder", "Fall", "Land", "GetUpBack", "GetUpFront", "GetUpSide",
 )
 # Suffix older configs used for the 52-bone versions of the built-in clips
 # (e.g. "IdleExtended"), from when a 16-bone rig also existed. Those

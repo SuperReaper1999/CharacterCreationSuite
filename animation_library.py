@@ -626,4 +626,42 @@ def _more_clips() -> dict[str, dict[str, Any]]:
               "UpperArm.L": r(20, 0, 12), "UpperArm.R": r(20, 0, -12), "Forearm.L": r(25), "Forearm.R": r(25), **hands("relaxed_open")}
     clips["Land"] = {"frames": 30, "loop": False, "poses": {1: fall_a, 4: impact, 10: settle, 30: rest}}
 
+    # --- Getting up -------------------------------------------------------
+    # Three get-ups that end standing at rest, each starting from a lying
+    # pose. Like Prone and Death they pivot around the hips; ground contact
+    # keeps the lowest point on the floor throughout. Hips +X tips the body
+    # onto its back, -X onto its front, and -Z onto its right side.
+    half_up = {"UpperLeg.L": r(50), "LowerLeg.L": r(-65), "Foot.L": r(15), "UpperLeg.R": r(25), "LowerLeg.R": r(-45), "Foot.R": r(20),
+               "Chest": r(-15), "UpperArm.L": r(15, 0, 10), "UpperArm.R": r(15, 0, -10), "Forearm.L": r(25), "Forearm.R": r(25), **hands("relaxed_open")}
+    kneel_up = {"UpperLeg.L": r(90), "LowerLeg.L": r(-90), "UpperLeg.R": r(-5), "LowerLeg.R": r(-90), "Foot.R": r(-40), "Chest": r(-10),
+                **arms(left=((15.0, 2.5, -13.6), 77.2)), "UpperArm.R": r(10, 0, -12), "Forearm.R": r(15), **hands("relaxed_open")}
+
+    # GetUpBack: on the back -> up on the elbows -> sitting with the knees
+    # up and the hands planted behind -> rock forward into a squat -> stand.
+    on_back = {"Hips": r(88), "Head": r(-12), "UpperArm.L": r(0, 0, 15), "UpperArm.R": r(0, 0, -15), "Forearm.L": r(10), "Forearm.R": r(10), **hands("relaxed_open")}
+    on_elbows = {"Hips": r(60), "UpperLeg.L": r(28), "UpperLeg.R": r(28), "Chest": r(-8), "Head": r(-20),
+                 "UpperArm.L": r(-40, 0, 15), "UpperArm.R": r(-40, 0, -15), "Forearm.L": r(60), "Forearm.R": r(60), **hands("resting")}
+    sit_back = {"Hips": r(15), "UpperLeg.L": r(110), "UpperLeg.R": r(110), "LowerLeg.L": r(-130), "LowerLeg.R": r(-130), "Foot.L": r(5), "Foot.R": r(5),
+                "Chest": r(-15), "Head": r(-5), "UpperArm.L": r(-30, 0, 20), "UpperArm.R": r(-30, 0, -20), "Forearm.L": r(10), "Forearm.R": r(10), **hands("resting")}
+    squat = {"UpperLeg.L": r(100), "UpperLeg.R": r(100), "LowerLeg.L": r(-140), "LowerLeg.R": r(-140), "Foot.L": r(40), "Foot.R": r(40),
+             "Chest": r(-35), "Head": r(15), "UpperArm.L": r(50, 0, 12), "UpperArm.R": r(50, 0, -12), "Forearm.L": r(20), "Forearm.R": r(20), **hands("relaxed_open")}
+    clips["GetUpBack"] = {"frames": 60, "loop": False, "poses": {1: on_back, 10: on_elbows, 20: sit_back, 32: squat, 46: half_up, 60: rest}}
+
+    # GetUpFront: face down -> push up -> on all fours -> one knee -> stand.
+    face_down = {"Hips": r(-85), "Head": r(40), "UpperArm.L": r(-20, 0, 45), "UpperArm.R": r(-20, 0, -45), "Forearm.L": r(100), "Forearm.R": r(100), **hands("resting")}
+    push_up = {"Hips": r(-62), "Head": r(30), "UpperArm.L": r(62, 0, 10), "UpperArm.R": r(62, 0, -10), "Forearm.L": r(5), "Forearm.R": r(5), **hands("resting")}
+    all_fours = {"Hips": r(-85), "UpperLeg.L": r(85), "UpperLeg.R": r(85), "LowerLeg.L": r(-90), "LowerLeg.R": r(-90), "Foot.L": r(-40), "Foot.R": r(-40),
+                 "Head": r(40), "UpperArm.L": r(85, 0, 8), "UpperArm.R": r(85, 0, -8), "Forearm.L": r(5), "Forearm.R": r(5), **hands("resting")}
+    clips["GetUpFront"] = {"frames": 60, "loop": False, "poses": {1: face_down, 10: push_up, 22: all_fours, 36: kneel_up, 48: half_up, 60: rest}}
+
+    # GetUpSide: on the right side, knees bent -> propped up on the right
+    # hand -> sitting on the right hip, legs folded -> one knee -> stand.
+    on_side = {"Hips": r(0, 0, -85), "Head": r(0, 0, 25), "UpperLeg.L": r(35), "UpperLeg.R": r(30), "LowerLeg.L": r(-50), "LowerLeg.R": r(-45),
+               "UpperArm.R": r(70, 0, -10), "Forearm.R": r(20), "UpperArm.L": r(25, 0, 5), "Forearm.L": r(40), **hands("relaxed_open")}
+    propped = {"Hips": r(0, 0, -55), "Head": r(0, 0, 20), "UpperLeg.L": r(60), "UpperLeg.R": r(55), "LowerLeg.L": r(-100), "LowerLeg.R": r(-95),
+               "UpperArm.R": r(15, 0, -50), "Forearm.R": r(5), "UpperArm.L": r(60, 0, -15), "Forearm.L": r(45), **hands("relaxed_open", "resting")}
+    side_sit = {"Hips": r(0, 0, -20), "Chest": r(-5, 0, 10), "UpperLeg.L": r(70), "UpperLeg.R": r(70), "LowerLeg.L": r(-110), "LowerLeg.R": r(-110),
+                "UpperArm.R": r(10, 0, -25), "Forearm.R": r(5), "UpperArm.L": r(30, 0, 8), "Forearm.L": r(40), **hands("relaxed_open", "resting")}
+    clips["GetUpSide"] = {"frames": 60, "loop": False, "poses": {1: on_side, 12: propped, 24: side_sit, 36: kneel_up, 48: half_up, 60: rest}}
+
     return clips

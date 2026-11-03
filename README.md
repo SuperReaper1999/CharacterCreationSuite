@@ -9,7 +9,7 @@ The character itself comes from [MPFB](https://extensions.blender.org/add-ons/mp
 - a textured outfit and shoes, fitted to the body;
 - MPFB's `game_engine` rig: 53 bones, including 3 bones per finger on both hands, with skin weights for the body and every clothing item.
 
-The suite adds the config/preset workflow, colour slots, 53 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
+The suite adds the config/preset workflow, colour slots, 56 built-in animations (converted onto the rig), the Blender preview/editor, and the exports.
 
 ## Setup
 
@@ -94,7 +94,7 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 
 ## Animations
 
-53 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
+56 built-in clips. Bones only rotate, and the character is kept on the floor automatically (see Ground contact below). Gestures and one-handed actions use the right hand.
 
 | Clip | Frames | Loops | Notes |
 |---|---|---|---|
@@ -107,6 +107,9 @@ The model and per-clip animation FBX files are on by default (`export_separate_a
 | `Jump` | 46 | no | Crouch, launch, land. |
 | `Fall` | 31 | yes | Airborne loop: arms out for balance, legs pedalling, looking down. In place, like `Jump`. |
 | `Land` | 30 | no | Impact into a deep crouch, arms down in front, then stand back up. Starts from the `Fall` pose. |
+| `GetUpBack` | 60 | no | From lying on the back: up on the elbows, sit with knees up and hands planted behind, rock into a squat, stand. |
+| `GetUpFront` | 60 | no | From face down: push up, onto all fours, up on one knee, stand. |
+| `GetUpSide` | 60 | no | From lying on the right side: prop up on the right hand, sit on the hip with legs folded, up on one knee, stand. |
 | `Crouch` | 30 | yes | Held crouch, feet flat. |
 | `CrouchWalkRifle` | 31 | yes | Crouched stride with both arms held forward in a two-handed rifle-ready pose. |
 | `Prone` | 30 | yes | Lying face-down (see below). |
